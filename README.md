@@ -50,6 +50,8 @@ The compatibility check uses the actual installed HardcoreRules 3.1.0 cache/filt
 
 No BepInEx plugin is included. This package does not install or replace OpenBarters or HardcoreRules, and it does not edit their configs.
 
+The v0.1.3 release DLL (SHA-256 `3335ae8b20009c362701ad72f0e4a5d5140ddde8e6dc4038dd478d6814707af1`) has a [VirusTotal scan report](https://www.virustotal.com/gui/file/3335ae8b20009c362701ad72f0e4a5d5140ddde8e6dc4038dd478d6814707af1/detection). The initial scan on 22 October 2026 reported 0 detections from 71 vendors.
+
 To uninstall, remove the Barterizer folder while the server is stopped, then restart. Do not remove purchased items from the profile.
 
 ## Configuration
