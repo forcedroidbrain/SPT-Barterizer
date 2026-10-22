@@ -2,11 +2,7 @@
 
 A server mod for **SPT 4.1.6** that turns cash offers into ordinary item barters. Designed to complement [OpenBarters](https://github.com/forcedroidbrain/OpenBarters/tree/feature/partial-barter-price-multiplier) and [HardcoreRules](https://github.com/dwesterwick/SPTHardcoreRules).
 
-Version **0.1.2**. Built against SPT 4.1.6. Automated checks include the vanilla database and the installed HardcoreRules 3.1.0 DLL; in-game trading has not yet been verified.
-
-0.1.1 excludes all templates with `DogTagQualities` from newly generated payment recipes. This includes ordinary, edition, prestige and modded dogtags, whose level/side cannot be represented by a generic loot ingredient. Existing dogtag barter recipes are unchanged. Restart the server and client to regenerate and refresh the converted offers.
-
-0.1.2 prefers at most **5 of each ingredient** so ordinary offers request more valuable loot instead of stacks of cheap food or batteries. Only prices that cannot be covered within this preference (for example T-7) may use larger counts, up to the existing hard limit. Existing barter recipes remain unchanged.
+Version **0.1.3**. Built against SPT 4.1.6. Automated checks include the vanilla database and the installed HardcoreRules 3.1.0 DLL; in-game trading on a clean installation has not yet been verified.
 
 ## Behavior
 
@@ -46,7 +42,7 @@ The compatibility check uses the actual installed HardcoreRules 3.1.0 cache/filt
 ## Installation
 
 1. Close the SPT server.
-2. Extract `SPT-Barterizer-0.1.2.zip` into the SPT root. The mod folder is `SPT_Runtime/user/mods/SPT-Barterizer/`.
+2. Extract `SPT-Barterizer-0.1.3.zip` into the SPT root. The mod folder is `SPT_Runtime/user/mods/SPT-Barterizer/`.
 3. Edit that folder's `config.json` if desired, then start the server.
 4. Inspect `[Barterizer]` startup messages and `conversion-report.json` in the mod folder. Check a normal converted offer, an existing barter, a cash medicine exception, loose ammunition, and an ammunition box before continuing a playthrough.
 
@@ -87,7 +83,7 @@ Requires PowerShell 7, .NET 10 SDK and a local SPT 4.1.6 installation. No NuGet 
 pwsh -File tools/Build.ps1 -SptRoot 'D:\SPT4'
 ```
 
-This builds the DLL, runs the test suite and packages `dist/SPT-Barterizer-0.1.2.zip`. It **does not deploy** to the game. The optional `-SkipTests` switch only builds and packages.
+This builds the DLL, runs the test suite and packages `dist/SPT-Barterizer-0.1.3.zip`. It **does not deploy** to the game. The optional `-SkipTests` switch only builds and packages.
 
 The tests exercise actual SPT models and serializers. `--spt-root` checks the real vanilla database and, when present, the installed HardcoreRules DLL. They run entirely in the test process: they do not launch the server or alter profiles, installed mods or database files. Test failures are caught and reported to the console with a nonzero exit status.
 
@@ -95,6 +91,25 @@ The database audit writes local reports to ignored `artifacts/`. At the initial 
 
 For development, `SptRoot` defaults to `D:/SPT4` and can also be passed as an MSBuild property. Tests copy runtime dependencies only to their ignored build directory.
 
+## Related mod and attribution
+
+[Barter Economy](https://github.com/DeadLeavez/Leaves-BarterEconomy) by DeadLeaves pursues the same idea of replacing trader cash purchases with item barters and inspired this mod's goal. SPT Barterizer is a separate C# implementation for SPT 4.1.6, not a fork or port of Barter Economy. It does not include Barter Economy code or assets. Its narrower rules preserve existing barter offers and integrate with HardcoreRules and OpenBarters as described above.
+
+## AI assistance
+
+OpenAI Codex was used to help develop and revise the C# code, automated tests and documentation. The project maintainer specified the intended behavior and is responsible for reviewing and releasing the resulting mod. The mod does not call an AI service during gameplay or server operation.
+
+## Changelog
+
+- **0.1.3:** Aligned the server metadata name with Forge naming rules and expanded documentation, attribution, support and AI disclosure. Barter-generation behavior is unchanged.
+- **0.1.2:** Prefer at most five of each ingredient by selecting more valuable items. Expensive offers that cannot meet this preference may use more, up to the existing hard limit.
+- **0.1.1:** Exclude all dynamic dogtag templates from newly generated payment recipes. Existing dogtag barters remain unchanged.
+- **0.1.0:** Initial SPT 4.1.6 cash-to-barter conversion with existing-barter preservation and optional HardcoreRules integration.
+
+## Support
+
+For bugs and compatibility reports, open an issue at [the project repository](https://github.com/forcedroidbrain/SPT-Barterizer/issues). Include the SPT and mod versions, relevant server-log messages and the steps to reproduce the problem. Do not post profiles or other private data.
+
 ## License
 
-MIT. This is a new C# implementation; it does not bundle Barter Economy, HardcoreRules or game assemblies.
+MIT. This mod does not bundle Barter Economy, HardcoreRules, OpenBarters or game assemblies. See the included `LICENSE` file.

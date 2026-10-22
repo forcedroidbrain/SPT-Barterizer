@@ -17,10 +17,10 @@ namespace SptBarterizer;
 public record ModMetadata : IModMetadata
 {
     public string ModGuid { get; init; } = "com.forcedroidbrain.barterizer";
-    public string Name { get; init; } = "SPT Barterizer";
+    public string Name { get; init; } = "SPTBarterizer";
     public string Author { get; init; } = "forcedroidbrain";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.1.2");
+    public SemanticVersioning.Version Version { get; init; } = new("0.1.3");
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
     public List<string>? Incompatibilities { get; init; }
