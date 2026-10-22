@@ -55,6 +55,22 @@ Check("cash alternative beside existing barter remains untouched", () =>
     string before = Json(trader);
     Assert(fixture.Engine().Convert(Fixture.TraderId, trader.Assort).Converted == 0 && before == Json(trader), "Alternative barter changed");
 });
+Check("dynamic dogtag templates never enter the generic payment pool", () =>
+{
+    var tags = new Fixture();
+    foreach (string id in new[] { "59f32bb586f774757e1e8442", "6662e9cda7e0b43baa3d5f76", "200000000000000000000007" })
+        tags.AddDogtag(id);
+    var settings = new Settings { ExcludedPaymentItemIds = [Fixture.PaymentA, Fixture.PaymentB, Fixture.PaymentC] };
+    try { tags.Engine(settings); throw new Exception("Dogtags were admitted as the only payment pool"); }
+    catch (InvalidDataException) { }
+    var trader = tags.Trader();
+    var engine = tags.Engine(); engine.Convert(Fixture.TraderId, trader.Assort);
+    Assert(engine.Report.SelectMany(recipe => recipe.Requirements).All(req => tags.Table.Items[(MongoId)req.Template].Properties?.DogTagQualities != true), "Generated dogtag recipe");
+    trader = tags.Trader();
+    trader.Assort.BarterScheme[(MongoId)Fixture.OfferId] = [[new() { Template = "59f32bb586f774757e1e8442", Count = 4, Level = 50 }]];
+    string before = Json(trader);
+    Assert(tags.Engine().Convert(Fixture.TraderId, trader.Assort).Converted == 0 && Json(trader) == before, "Original level-qualified dogtag barter changed");
+});
 Check("all cash alternatives converted atomically", () =>
 {
     var trader = fixture.Trader();
@@ -228,6 +244,7 @@ void AuditDatabase(string root)
         Assert(engine.Convert(trader.Base.Id.ToString(), trader.Assort).Converted == 0 && after == Json(trader), "Vanilla conversion not idempotent");
     }
     Directory.CreateDirectory("artifacts");
+    Assert(engine.Report.SelectMany(recipe => recipe.Requirements).All(req => templates[(MongoId)req.Template].Properties?.DogTagQualities != true), "Real database generated a dogtag requirement");
     File.WriteAllText("artifacts/vanilla-conversion-report.json", Json(engine.Report));
     File.WriteAllLines("artifacts/vanilla-conversion-failures.txt", errors);
     Console.WriteLine($"AUDIT: converted={converted}; preserved barters={existing}; cash loose ammo={ammoCash}; barter ammo boxes={boxes}; failures={failures}");
@@ -334,6 +351,11 @@ public sealed class Fixture
     {
         Table.Items[(MongoId)id] = new() { Id = id, Parent = parent, Name = id, Type = item ? "Item" : "Node", Properties = new() { QuestItem = false } };
         prices[(MongoId)id] = price;
+    }
+    public void AddDogtag(string id)
+    {
+        Add(id, "5448eb774bdc2d0a728b4567", 900);
+        Table.Items[(MongoId)id].Properties!.DogTagQualities = true;
     }
     public ConversionEngine Engine(Settings? settings = null, HardcorePolicy? policy = null) => new(settings ?? new(), Table, id => prices.GetValueOrDefault(id), policy);
     public Trader Trader(string sold = Sold) => new()

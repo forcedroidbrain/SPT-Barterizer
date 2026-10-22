@@ -29,7 +29,11 @@ public sealed class ConversionEngine
         this.templates = templates.Items;
         this.price = price;
         this.hardcore = hardcore ?? HardcorePolicy.Empty;
+        // Dogtags are dynamic items whose value and eligibility depend on the owner's
+        // level/side. This applies to prestige and modded tags as well as basic BEAR/USEC.
+        // Preserve existing dogtag barters, but do not invent unqualified level-zero ones.
         pool = this.templates.Values.Where(item => item.Type == "Item" && item.Properties?.QuestItem != true
+                && item.Properties?.DogTagQualities != true
                 && !CashTemplates.Contains(item.Id.ToString()) && !settings.ExcludedPaymentItemIds.Contains(item.Id.ToString())
                 && InCategories(item.Id.ToString(), settings.PaymentItemCategories)
                 && !InCategories(item.Id.ToString(), ["543be5dd4bdc2deb348b4569"]))
