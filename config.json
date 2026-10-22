@@ -4,6 +4,7 @@
   "priceMultiplier": 1.0,
   "maxDifferentItems": 3,
   "maxCountPerItem": 20,
+  "preferredMaxCountPerItem": 5,
   "minimumCashPriceRoubles": 0,
   "minimumPaymentItemPrice": 100,
   "maximumPaymentItemPrice": 1000000,

@@ -2,9 +2,11 @@
 
 A server mod for **SPT 4.1.6** that turns cash offers into ordinary item barters. Designed to complement [OpenBarters](https://github.com/forcedroidbrain/OpenBarters/tree/feature/partial-barter-price-multiplier) and [HardcoreRules](https://github.com/dwesterwick/SPTHardcoreRules).
 
-Version **0.1.1**. Built against SPT 4.1.6. Automated checks include the vanilla database and the installed HardcoreRules 3.1.0 DLL; in-game trading has not yet been verified.
+Version **0.1.2**. Built against SPT 4.1.6. Automated checks include the vanilla database and the installed HardcoreRules 3.1.0 DLL; in-game trading has not yet been verified.
 
 0.1.1 excludes all templates with `DogTagQualities` from newly generated payment recipes. This includes ordinary, edition, prestige and modded dogtags, whose level/side cannot be represented by a generic loot ingredient. Existing dogtag barter recipes are unchanged. Restart the server and client to regenerate and refresh the converted offers.
+
+0.1.2 prefers at most **5 of each ingredient** so ordinary offers request more valuable loot instead of stacks of cheap food or batteries. Only prices that cannot be covered within this preference (for example T-7) may use larger counts, up to the existing hard limit. Existing barter recipes remain unchanged.
 
 ## Behavior
 
@@ -44,7 +46,7 @@ The compatibility check uses the actual installed HardcoreRules 3.1.0 cache/filt
 ## Installation
 
 1. Close the SPT server.
-2. Extract `SPT-Barterizer-0.1.1.zip` into the SPT root. The mod folder is `SPT_Runtime/user/mods/SPT-Barterizer/`.
+2. Extract `SPT-Barterizer-0.1.2.zip` into the SPT root. The mod folder is `SPT_Runtime/user/mods/SPT-Barterizer/`.
 3. Edit that folder's `config.json` if desired, then start the server.
 4. Inspect `[Barterizer]` startup messages and `conversion-report.json` in the mod folder. Check a normal converted offer, an existing barter, a cash medicine exception, loose ammunition, and an ammunition box before continuing a playthrough.
 
@@ -62,7 +64,8 @@ Changes require a server restart.
 | `seed` | `barterizer-v1` | Stable recipe seed; change it to regenerate recipes on restart |
 | `priceMultiplier` | `1.0` | Base recipe cost; separate from the OpenBarters substitute multiplier |
 | `maxDifferentItems` | `3` | Maximum ingredient types per recipe, range 1–5 |
-| `maxCountPerItem` | `20` | Maximum count of each ingredient |
+| `maxCountPerItem` | `20` | Hard maximum count of each ingredient |
+| `preferredMaxCountPerItem` | `5` | Prefer this count or less by choosing higher-value ingredients; relax only if the target cannot be covered within the available ingredient types and prices. Never exceeds the hard maximum |
 | `minimumCashPriceRoubles` | `0` | Leave cheaper offers as cash; HardcoreRules may hide those |
 | `minimumPaymentItemPrice` | `100` | Minimum eligible ingredient handbook price |
 | `maximumPaymentItemPrice` | `1000000` | Maximum eligible ingredient handbook price; includes valuable loot for expensive offers such as T-7 |
@@ -84,7 +87,7 @@ Requires PowerShell 7, .NET 10 SDK and a local SPT 4.1.6 installation. No NuGet 
 pwsh -File tools/Build.ps1 -SptRoot 'D:\SPT4'
 ```
 
-This builds the DLL, runs the test suite and packages `dist/SPT-Barterizer-0.1.1.zip`. It **does not deploy** to the game. The optional `-SkipTests` switch only builds and packages.
+This builds the DLL, runs the test suite and packages `dist/SPT-Barterizer-0.1.2.zip`. It **does not deploy** to the game. The optional `-SkipTests` switch only builds and packages.
 
 The tests exercise actual SPT models and serializers. `--spt-root` checks the real vanilla database and, when present, the installed HardcoreRules DLL. They run entirely in the test process: they do not launch the server or alter profiles, installed mods or database files. Test failures are caught and reported to the console with a nonzero exit status.
 

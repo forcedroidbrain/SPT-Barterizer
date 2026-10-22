@@ -9,6 +9,7 @@ public sealed class Settings
     public decimal PriceMultiplier { get; set; } = 1m;
     public int MaxDifferentItems { get; set; } = 3;
     public int MaxCountPerItem { get; set; } = 20;
+    public int PreferredMaxCountPerItem { get; set; } = 5;
     public decimal MinimumCashPriceRoubles { get; set; }
     public decimal MinimumPaymentItemPrice { get; set; } = 100m;
     public decimal MaximumPaymentItemPrice { get; set; } = 1000000m;
@@ -33,6 +34,7 @@ public sealed class Settings
     {
         if (string.IsNullOrWhiteSpace(Seed) || PriceMultiplier < 0.01m || PriceMultiplier > 100m
             || MaxDifferentItems is < 1 or > 5 || MaxCountPerItem is < 1 or > 10000
+            || PreferredMaxCountPerItem is < 1 or > 10000
             || MinimumCashPriceRoubles < 0 || MinimumPaymentItemPrice <= 0
             || MaximumPaymentItemPrice < MinimumPaymentItemPrice)
             throw new InvalidDataException("Invalid Barterizer price, seed or recipe limits.");

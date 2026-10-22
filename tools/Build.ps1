@@ -20,7 +20,7 @@ try {
     New-Item -ItemType Directory -Path $modFolder -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo 'src/bin/Release/net10.0/SPT.Barterizer.dll') -Destination $modFolder
     foreach ($name in @('config.json', 'README.md', 'LICENSE')) { Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $modFolder }
-    $zip = Join-Path $repo 'dist/SPT-Barterizer-0.1.1.zip'
+    $zip = Join-Path $repo 'dist/SPT-Barterizer-0.1.2.zip'
     Compress-Archive -LiteralPath (Join-Path $packageRoot 'SPT_Runtime') -DestinationPath $zip -Force
     Write-Host "Packaged: $zip"
 } finally { Pop-Location }

@@ -166,6 +166,32 @@ Check("recipe bounds, prices and deterministic ordering", () =>
     }
 });
 
+Check("prefer valuable ingredients to large stacks whenever capacity permits", () =>
+{
+    var settings = new Settings { MaxDifferentItems = 3, MaxCountPerItem = 20, PreferredMaxCountPerItem = 5 };
+    var pool = new PaymentItem[] { new(Fixture.PaymentA, 652), new(Fixture.PaymentB, 2207), new(Fixture.PaymentC, 8000) };
+    for (int target = 100; target <= 54000; target += 137)
+    {
+        var recipe = RecipeGenerator.Generate(target, pool, target.ToString(), settings);
+        Assert(recipe is not null && recipe.All(i => i.Count <= 5), $"Feasible compact recipe skipped at {target}");
+        Assert(recipe!.Sum(i => i.Count * i.UnitPrice) >= target, "Compact recipe underpays");
+    }
+});
+Check("extreme prices relax preference without exceeding hard limits", () =>
+{
+    var pool = new PaymentItem[] { new(Fixture.PaymentA, 1000), new(Fixture.PaymentB, 2000), new(Fixture.PaymentC, 3000) };
+    var settings = new Settings { MaxDifferentItems = 3, MaxCountPerItem = 20, PreferredMaxCountPerItem = 5 };
+    var recipe = RecipeGenerator.Generate(100000, pool, "expensive", settings);
+    Assert(recipe is not null && recipe.Any(i => i.Count > 5) && recipe.All(i => i.Count <= 20)
+        && recipe.Sum(i => i.Count * i.UnitPrice) >= 100000, "Extreme-price fallback failed");
+    Assert(RecipeGenerator.Generate(120001, pool, "impossible", settings) is null, "Hard capacity exceeded");
+    settings.MaxCountPerItem = 2;
+    Assert(RecipeGenerator.Generate(12000, pool, "strict", settings)!.All(i => i.Count <= 2), "Preference overrides hard cap");
+    settings.PreferredMaxCountPerItem = 0;
+    try { settings.Validate(); throw new Exception("Invalid preferred count accepted"); }
+    catch (InvalidDataException) { }
+});
+
 string? sptRoot = args.Length == 2 && args[0] == "--spt-root" ? args[1] : null;
 Check("SPT assortment and restock hooks bind to the installed core", () =>
 {

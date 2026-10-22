@@ -12,6 +12,17 @@ public static class RecipeGenerator
     public static IReadOnlyList<Ingredient>? Generate(decimal target, IReadOnlyList<PaymentItem> pool,
         string key, Settings settings)
     {
+        // Prefer valuable loot over large stacks. Relax this preference only when
+        // even the highest-priced ingredients cannot cover the target within it.
+        int preferred = Math.Min(settings.PreferredMaxCountPerItem, settings.MaxCountPerItem);
+        return GenerateWithinLimit(target, pool, key, settings, preferred)
+            ?? (preferred < settings.MaxCountPerItem
+                ? GenerateWithinLimit(target, pool, key, settings, settings.MaxCountPerItem) : null);
+    }
+
+    private static IReadOnlyList<Ingredient>? GenerateWithinLimit(decimal target, IReadOnlyList<PaymentItem> pool,
+        string key, Settings settings, int maxCount)
+    {
         if (target <= 0 || pool.Count == 0) return null;
         var candidates = pool.OrderBy(item => item.Template, StringComparer.Ordinal).ToList();
         if (candidates.Any(item => item.Price <= 0)) throw new ArgumentException("Nonpositive payment price.");
@@ -25,12 +36,12 @@ public static class RecipeGenerator
             int slotsLeft = slots - slot;
             decimal share = remaining / slotsLeft;
             var choices = candidates.Where(item => item.Price <= share &&
-                item.Price * settings.MaxCountPerItem >= share).ToArray();
+                item.Price * maxCount >= share).ToArray();
             if (slotsLeft == 1 || choices.Length == 0)
             {
                 var finish = candidates.Select(item => new Ingredient(item.Template,
                         Math.Max(1m, decimal.Ceiling(remaining / item.Price)), item.Price))
-                    .Where(item => item.Count <= settings.MaxCountPerItem)
+                    .Where(item => item.Count <= maxCount)
                     .OrderBy(item => item.Count * item.UnitPrice - remaining)
                     .ThenBy(item => item.Template, StringComparer.Ordinal).ToArray();
                 if (finish.Length == 0) return Fallback();
@@ -41,7 +52,7 @@ public static class RecipeGenerator
                 break;
             }
             var chosen = choices[random.Next(choices.Length)];
-            decimal quantity = Math.Clamp(decimal.Floor(share / chosen.Price), 1m, settings.MaxCountPerItem);
+            decimal quantity = Math.Clamp(decimal.Floor(share / chosen.Price), 1m, maxCount);
             recipe.Add(new(chosen.Template, quantity, chosen.Price));
             remaining -= quantity * chosen.Price;
             candidates.Remove(chosen);
@@ -54,7 +65,7 @@ public static class RecipeGenerator
             // single type; then use the largest available capacities within the type limit.
             var single = pool.Select(item => new Ingredient(item.Template,
                     Math.Max(1m, decimal.Ceiling(target / item.Price)), item.Price))
-                .Where(item => item.Count <= settings.MaxCountPerItem)
+                .Where(item => item.Count <= maxCount)
                 .OrderBy(item => item.Count * item.UnitPrice - target)
                 .ThenBy(item => item.Template, StringComparer.Ordinal).FirstOrDefault();
             if (single is not null) return [single];
@@ -63,7 +74,7 @@ public static class RecipeGenerator
             foreach (var item in pool.OrderByDescending(item => item.Price).ThenBy(item => item.Template, StringComparer.Ordinal)
                          .Take(settings.MaxDifferentItems))
             {
-                decimal count = Math.Min(settings.MaxCountPerItem, decimal.Ceiling(missing / item.Price));
+                decimal count = Math.Min(maxCount, decimal.Ceiling(missing / item.Price));
                 fallback.Add(new(item.Template, count, item.Price));
                 missing -= count * item.Price;
                 if (missing <= 0) return fallback;
