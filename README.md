@@ -1,8 +1,10 @@
 # SPT Barterizer
 
+![SPT Barterizer cover art](assets/forge-icon.png)
+
 A server mod for **SPT 4.1.6** that turns cash offers into ordinary item barters. Designed to complement [OpenBarters](https://github.com/forcedroidbrain/OpenBarters/tree/feature/partial-barter-price-multiplier) and [HardcoreRules](https://github.com/dwesterwick/SPTHardcoreRules).
 
-Version **0.1.3**. Built against SPT 4.1.6. Automated checks include the vanilla database and the installed HardcoreRules 3.1.0 DLL; in-game trading on a clean installation has not yet been verified.
+Version **0.1.3**. Built against SPT 4.1.6. Automated checks include the clean SPT database and the installed HardcoreRules 3.1.0 DLL. The released ZIP was installed on a clean SPT 4.1.6 server: it loaded without Barterizer errors and generated 2113 barter recipes. In-game purchasing on a clean installation has not yet been verified.
 
 ## Behavior
 
@@ -87,7 +89,7 @@ This builds the DLL, runs the test suite and packages `dist/SPT-Barterizer-0.1.3
 
 The tests exercise actual SPT models and serializers. `--spt-root` checks the real vanilla database and, when present, the installed HardcoreRules DLL. They run entirely in the test process: they do not launch the server or alter profiles, installed mods or database files. Test failures are caught and reported to the console with a nonzero exit status.
 
-The database audit writes local reports to ignored `artifacts/`. At the initial verified configuration it converted **2092** cash offers, preserved **568** existing barter offers, left **163** loose-ammunition offers as cash and kept **25** ammunition-box offers as barters, with no conversion failures. These are base-database counts; other installed mods can change the live totals.
+The database audit writes local reports to ignored `artifacts/`. Against the clean SPT 4.1.6 database, it converted **2113** cash offers, preserved **568** existing barter offers, left **163** loose-ammunition offers as cash and kept **25** ammunition-box offers as barters, with no conversion failures. Other installed mods can change the live totals.
 
 For development, `SptRoot` defaults to `D:/SPT4` and can also be passed as an MSBuild property. Tests copy runtime dependencies only to their ignored build directory.
 
@@ -97,7 +99,7 @@ For development, `SptRoot` defaults to `D:/SPT4` and can also be passed as an MS
 
 ## AI assistance
 
-OpenAI Codex was used to help develop and revise the C# code, automated tests and documentation. The project maintainer specified the intended behavior and is responsible for reviewing and releasing the resulting mod. The mod does not call an AI service during gameplay or server operation.
+OpenAI Codex was used to help develop and revise the C# code, automated tests and documentation. The cover art in `assets/forge-icon.png` was generated with OpenAI image generation. Any Forge submission must enable the **Contains AI Content** flag. The project maintainer specified the intended behavior and is responsible for reviewing and releasing the resulting mod. The mod does not call an AI service during gameplay or server operation.
 
 ## Changelog
 
