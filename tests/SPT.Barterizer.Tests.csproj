@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../src/SPT.Barterizer.csproj" />
+    <Reference Update="@(Reference)"><Private>true</Private></Reference>
+    <Reference Include="$(SptRoot)/SPT_Runtime/user/mods/HardcoreRules/HardcoreRules-Server.dll" Condition="Exists('$(SptRoot)/SPT_Runtime/user/mods/HardcoreRules/HardcoreRules-Server.dll')">
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

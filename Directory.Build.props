@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <SptRoot Condition="'$(SptRoot)' == ''">D:/SPT4</SptRoot>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Reference Include="$(SptRoot)/SPT_Runtime/*.dll" Exclude="$(SptRoot)/SPT_Runtime/*.Patched.dll;$(SptRoot)/SPT_Runtime/argon2_sharp_core.dll">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
