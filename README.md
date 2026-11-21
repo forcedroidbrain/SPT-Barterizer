@@ -4,7 +4,7 @@
 
 A server mod for **SPT 4.1.6** that turns cash offers into ordinary item barters. Designed to complement [OpenBarters](https://github.com/forcedroidbrain/OpenBarters/tree/feature/partial-barter-price-multiplier) and [HardcoreRules](https://github.com/dwesterwick/SPTHardcoreRules).
 
-Version **0.1.3**. Built against SPT 4.1.6. Automated checks include the clean SPT database and the installed HardcoreRules 3.1.0 DLL. The released ZIP was installed on a clean SPT 4.1.6 server: it loaded without Barterizer errors and generated 2113 barter recipes. In-game purchasing on a clean installation has not yet been verified.
+Version **0.2.0**. Built against SPT 4.1.6. Automated checks cover the SPT database at default settings and with barter variety enabled, and the installed HardcoreRules 3.1.0 DLL. Runtime server loading and in-game purchasing have not yet been verified for this version.
 
 ## Behavior
 
@@ -25,6 +25,8 @@ The target recipe value is the original cash cost converted to roubles using han
 
 The generator uses positive, whole item counts. Recipe value meets or exceeds the target; integer rounding can make cheap offers noticeably more expensive. It tries a varied recipe, then falls back to a valid bounded recipe if random choices cannot finish it. If the pool or configured limits cannot represent a price, the original cash offer is left unchanged and a warning is logged.
 
+For more variety, set `recipeValueTolerancePercent` to e.g. `25` and restart the server. When finishing a recipe, the generator randomly chooses among options whose complete recipe value is within 25% above the cheapest valid completion, including ingredients already selected. For example, if the cheapest completion makes a 1000-rouble recipe, alternatives up to 1250 roubles are eligible. This also applies to single-item fallback recipes; the multi-item capacity fallback is unchanged. Values use handbook prices, not market or trader resale prices. The tolerance is relative to the cheapest completion at that step, not the original cash cost or a globally optimal recipe; rounding can already make that completion exceed the cash target. Variety requires multiple eligible options and is not guaranteed for every offer. The same seed, configuration, offer IDs and payment pool still produce the same recipes. `0` (or an omitted setting) preserves the previous recipes exactly.
+
 The server does not apply OpenBarters' substitute surcharge. With our OpenBarters branch, bringing the requested ingredients closes their part of the recipe at full credit; only the missing part gets its F12 multiplier (default **1.5**). The effective cost of substitutes also depends on the trader's sell-tab prices.
 
 Stock OpenBarters can also recognize generated recipes as ordinary barters, but it does not have the partial-substitution pricing added in our branch. OpenBarters itself is optional: the generated recipes can be paid normally.
@@ -44,13 +46,15 @@ The compatibility check uses the actual installed HardcoreRules 3.1.0 cache/filt
 ## Installation
 
 1. Close the SPT server.
-2. Extract `SPT-Barterizer-0.1.3.zip` into the SPT root. The mod folder is `SPT_Runtime/user/mods/SPT-Barterizer/`.
+2. Extract `SPT-Barterizer-0.2.0.zip` into the SPT root. The mod folder is `SPT_Runtime/user/mods/SPT-Barterizer/`.
 3. Edit that folder's `config.json` if desired, then start the server.
 4. Inspect `[Barterizer]` startup messages and `conversion-report.json` in the mod folder. Check a normal converted offer, an existing barter, a cash medicine exception, loose ammunition, and an ammunition box before continuing a playthrough.
 
 No BepInEx plugin is included. This package does not install or replace OpenBarters or HardcoreRules, and it does not edit their configs.
 
-The v0.1.3 release DLL (SHA-256 `3335ae8b20009c362701ad72f0e4a5d5140ddde8e6dc4038dd478d6814707af1`) has a [VirusTotal scan report](https://www.virustotal.com/gui/file/3335ae8b20009c362701ad72f0e4a5d5140ddde8e6dc4038dd478d6814707af1/detection). The initial scan on 22 October 2026 reported 0 detections from 71 vendors.
+When upgrading, back up your existing mod folder and keep your current `config.json` instead of replacing it with the ZIP's defaults. The new `recipeValueTolerancePercent` setting defaults to `0` when omitted. Add it with a value such as `25` to enable variety, then restart the server.
+
+A VirusTotal scan report for the v0.2.0 DLL is pending. The v0.1.3 scan does not cover this version; obtain a new report before publishing executable content on Forge.
 
 To uninstall, remove the Barterizer folder while the server is stopped, then restart. Do not remove purchased items from the profile.
 
@@ -63,6 +67,7 @@ Changes require a server restart.
 | `enabled` | `true` | Enable conversion and hooks |
 | `seed` | `barterizer-v1` | Stable recipe seed; change it to regenerate recipes on restart |
 | `priceMultiplier` | `1.0` | Base recipe cost; separate from the OpenBarters substitute multiplier |
+| `recipeValueTolerancePercent` | `0` | Extra value allowed above the cheapest completion for seeded variety, range 0–100 percent; `0` preserves previous recipes |
 | `maxDifferentItems` | `3` | Maximum ingredient types per recipe, range 1–5 |
 | `maxCountPerItem` | `20` | Hard maximum count of each ingredient |
 | `preferredMaxCountPerItem` | `5` | Prefer this count or less by choosing higher-value ingredients; relax only if the target cannot be covered within the available ingredient types and prices. Never exceeds the hard maximum |
@@ -87,11 +92,11 @@ Requires PowerShell 7, .NET 10 SDK and a local SPT 4.1.6 installation. No NuGet 
 pwsh -File tools/Build.ps1 -SptRoot 'D:\SPT4'
 ```
 
-This builds the DLL, runs the test suite and packages `dist/SPT-Barterizer-0.1.3.zip`. It **does not deploy** to the game. The optional `-SkipTests` switch only builds and packages.
+This builds the DLL, runs the test suite and packages `dist/SPT-Barterizer-0.2.0.zip`. The package version is read from the project file. It **does not deploy** to the game. The optional `-SkipTests` switch only builds and packages.
 
 The tests exercise actual SPT models and serializers. `--spt-root` checks the real vanilla database and, when present, the installed HardcoreRules DLL. They run entirely in the test process: they do not launch the server or alter profiles, installed mods or database files. Test failures are caught and reported to the console with a nonzero exit status.
 
-The database audit writes local reports to ignored `artifacts/`. Against the clean SPT 4.1.6 database, it converted **2113** cash offers, preserved **568** existing barter offers, left **163** loose-ammunition offers as cash and kept **25** ammunition-box offers as barters, with no conversion failures. Other installed mods can change the live totals.
+The database audit writes local reports to ignored `artifacts/`, with separate reports for default settings and 25% variety. The current local SPT 4.1.6 database audit converts **2092** cash offers in each mode, preserves **568** existing barter offers, leaves **163** loose-ammunition offers as cash and keeps **25** ammunition-box offers as barters, with no conversion failures. These are offline audit results, not live server results; installed configuration and database changes can affect the totals.
 
 For development, `SptRoot` defaults to `D:/SPT4` and can also be passed as an MSBuild property. Tests copy runtime dependencies only to their ignored build directory.
 
@@ -105,6 +110,7 @@ OpenAI Codex was used to help develop and revise the C# code, automated tests an
 
 ## Changelog
 
+- **0.2.0:** Added optional `recipeValueTolerancePercent` (0–100) for seeded variety among similarly priced recipe completions. The default `0`, including older configs without the setting, preserves previous recipes. Existing barters and offer restrictions remain unchanged.
 - **0.1.3:** Aligned the server metadata name with Forge naming rules and expanded documentation, attribution, support and AI disclosure. Barter-generation behavior is unchanged.
 - **0.1.2:** Prefer at most five of each ingredient by selecting more valuable items. Expensive offers that cannot meet this preference may use more, up to the existing hard limit.
 - **0.1.1:** Exclude all dynamic dogtag templates from newly generated payment recipes. Existing dogtag barters remain unchanged.

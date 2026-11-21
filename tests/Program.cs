@@ -166,6 +166,93 @@ Check("recipe bounds, prices and deterministic ordering", () =>
     }
 });
 
+Check("zero tolerance preserves the pre-diversity recipe fingerprint", () =>
+{
+    // Captured from v0.1.3's generator before adding the tolerance setting.
+    var samples = new List<string>();
+    var pool = new PaymentItem[] { new("a", 500), new("b", 2000), new("c", 8000), new("d", 2000) };
+    foreach (int slots in new[] { 1, 3 })
+    foreach (string seed in new[] { "barterizer-v1", "another-seed" })
+    for (int amount = 1; amount <= 250000; amount += 997)
+        samples.Add(JsonSerializer.Serialize(RecipeGenerator.Generate(amount, pool, $"offer/{amount}",
+            new Settings { Seed = seed, MaxDifferentItems = slots })));
+    string fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        System.Text.Encoding.UTF8.GetBytes(string.Join("\n", samples))));
+    Assert(fingerprint == "C978D29EFB09DF7E42E3DA7D774C20D4E2C74E9A7D6C1241AC876ECCCE0F7092", "Default recipes changed");
+});
+Check("tolerance is optional, serialized and validated", () =>
+{
+    var legacy = JsonSerializer.Deserialize<Settings>("{}", Settings.Json)!;
+    Assert(legacy.RecipeValueTolerancePercent == 0, "Missing setting enables variety");
+    var configured = JsonSerializer.Deserialize<Settings>("{\"recipeValueTolerancePercent\":25.5}", Settings.Json)!;
+    configured.Validate();
+    Assert(configured.RecipeValueTolerancePercent == 25.5m
+        && JsonSerializer.Serialize(configured, Settings.Json).Contains("\"recipeValueTolerancePercent\": 25.5"), "Setting does not round-trip");
+    foreach (decimal value in new[] { -0.01m, 100.01m })
+    {
+        try { new Settings { RecipeValueTolerancePercent = value }.Validate(); throw new Exception("Invalid tolerance accepted"); }
+        catch (InvalidDataException) { }
+    }
+    new Settings { RecipeValueTolerancePercent = 100 }.Validate();
+});
+Check("cheap offers gain seeded variety within the inclusive value tolerance", () =>
+{
+    var pool = new PaymentItem[] { new("a", 500), new("b", 625), new("c", 626) };
+    var settings = new Settings { RecipeValueTolerancePercent = 25 };
+    var selected = new HashSet<string>();
+    bool seedMatters = false;
+    for (int i = 0; i < 100; i++)
+    {
+        string key = $"cheap/{i}";
+        var recipe = RecipeGenerator.Generate(100, pool, key, settings)!;
+        Assert(recipe.Count == 1 && recipe[0].Count == 1 && recipe[0].Template != "c", "Tolerance boundary exceeded");
+        selected.Add(recipe[0].Template);
+        Assert(Json(recipe) == Json(RecipeGenerator.Generate(100, pool.Reverse().ToArray(), key, settings)), "Variety depends on pool order");
+        Assert(Json(recipe) == Json(RecipeGenerator.Generate(100, pool, key, settings)), "Variety is not repeatable");
+        seedMatters |= Json(recipe) != Json(RecipeGenerator.Generate(100, pool, key,
+            new Settings { Seed = "another-seed", RecipeValueTolerancePercent = 25 }));
+        Assert(RecipeGenerator.Generate(100, pool, key, new Settings())!.Single().Template == "a", "Zero tolerance admits a more expensive item");
+    }
+    Assert(selected.SetEquals(["a", "b"]), "Similar-price ingredients lack variety");
+    Assert(seedMatters, "Seed does not influence variety");
+    Assert(RecipeGenerator.Generate(100, [new("only", 500)], "one", settings)!.Single().Count == 1, "Single-option pool failed");
+});
+Check("enabled variety respects recipe capacity, total value and determinism", () =>
+{
+    var pool = new PaymentItem[] { new("a", 500), new("b", 2000), new("c", 8000), new("d", 2200) };
+    foreach (decimal tolerance in new[] { 25m, 100m })
+    foreach (int slots in new[] { 1, 3 })
+    foreach (int cap in new[] { 2, 20 })
+    for (int target = 1; target <= 250000; target += 997)
+    {
+        var settings = new Settings { RecipeValueTolerancePercent = tolerance, MaxDifferentItems = slots, MaxCountPerItem = cap };
+        string key = $"bounded/{target}";
+        var recipe = RecipeGenerator.Generate(target, pool, key, settings);
+        var original = RecipeGenerator.Generate(target, pool, key, new Settings { MaxDifferentItems = slots, MaxCountPerItem = cap });
+        Assert((recipe is null) == (original is null), "Tolerance changed representability");
+        if (recipe is null) continue;
+        Assert(recipe.Count <= slots && recipe.Select(i => i.Template).Distinct().Count() == recipe.Count
+            && recipe.All(i => i.Count >= 1 && i.Count <= cap && i.Count == decimal.Truncate(i.Count)), "Variety violates recipe limits");
+        decimal value = recipe.Sum(i => i.Count * i.UnitPrice);
+        Assert(value >= target && value <= original!.Sum(i => i.Count * i.UnitPrice) * (1 + tolerance / 100), "Variety violates value bounds");
+        Assert(Json(recipe) == Json(RecipeGenerator.Generate(target, pool.Reverse().ToArray(), key, settings)), "Enabled variety is unstable");
+    }
+});
+Check("enabled variety preserves conversion exclusions and repeated conversion", () =>
+{
+    var settings = new Settings { RecipeValueTolerancePercent = 25 };
+    var trader = fixture.Trader(Fixture.PaymentA);
+    trader.Assort.Items.Add(new() { Id = "300000000000000000000002", Template = Fixture.PaymentB, ParentId = Fixture.OfferId, SlotId = "mod_scope" });
+    string before = NonPaymentJson(trader);
+    var engine = fixture.Engine(settings);
+    Assert(engine.Convert(Fixture.TraderId, trader.Assort).Converted == 1, "Enabled variety did not convert");
+    Assert(before == NonPaymentJson(trader), "Variety changed offer metadata");
+    Assert(engine.Report.Single().Requirements.All(i => i.Template != Fixture.PaymentA && i.Template != Fixture.PaymentB), "Variety allows self-payment");
+    string converted = Json(trader);
+    Assert(engine.Convert(Fixture.TraderId, trader.Assort).Converted == 0 && converted == Json(trader), "Variety mutates an existing barter");
+    Assert(fixture.Engine(settings).Convert(Fixture.TraderId, fixture.Trader(Fixture.Ammo).Assort).Converted == 0, "Variety converts excluded ammo");
+});
+
 Check("prefer valuable ingredients to large stacks whenever capacity permits", () =>
 {
     var settings = new Settings { MaxDifferentItems = 3, MaxCountPerItem = 20, PreferredMaxCountPerItem = 5 };
@@ -209,6 +296,7 @@ Check("SPT assortment and restock hooks bind to the installed core", () =>
 if (sptRoot is not null)
 {
     Check("real SPT 4.1.6 vanilla database audit", () => AuditDatabase(sptRoot));
+    Check("real SPT database audit with 25 percent variety", () => AuditDatabase(sptRoot, 25));
     if (File.Exists(Path.Combine(sptRoot, "SPT_Runtime/user/mods/HardcoreRules/HardcoreRules-Server.dll")))
         Check("installed HardcoreRules actual cache/filter/restore integration", () => CheckHardcore(sptRoot));
     else Console.WriteLine("SKIP: optional HardcoreRules DLL is not installed.");
@@ -225,7 +313,7 @@ static string NonPaymentJson(Trader trader)
     return node.ToJsonString();
 }
 
-void AuditDatabase(string root)
+void AuditDatabase(string root, decimal tolerance = 0)
 {
     string database = Path.Combine(root, "SPT_Runtime/SPT_Data/database");
     var templates = JsonSerializer.Deserialize<Dictionary<MongoId, TemplateItem>>(File.ReadAllText(Path.Combine(database, "templates/items.json")), TestJson.Options)!;
@@ -233,7 +321,7 @@ void AuditDatabase(string root)
     var prices = handbook.Items.ToDictionary(item => item.Id, item => item.Price ?? 0d);
     var table = Fixture.TemplateTableWithItems(templates);
     var policy = HardcorePolicy.Read(Path.Combine(root, "SPT_Runtime/user/mods/HardcoreRules/config.json"));
-    var engine = new ConversionEngine(new(), table, id => prices.GetValueOrDefault(id), policy);
+    var engine = new ConversionEngine(new() { RecipeValueTolerancePercent = tolerance }, table, id => prices.GetValueOrDefault(id), policy);
     int converted = 0, failures = 0, ammoCash = 0, boxes = 0, existing = 0;
     var errors = new List<string>();
     foreach (string folder in Directory.GetDirectories(Path.Combine(database, "traders")))
@@ -271,9 +359,10 @@ void AuditDatabase(string root)
     }
     Directory.CreateDirectory("artifacts");
     Assert(engine.Report.SelectMany(recipe => recipe.Requirements).All(req => templates[(MongoId)req.Template].Properties?.DogTagQualities != true), "Real database generated a dogtag requirement");
-    File.WriteAllText("artifacts/vanilla-conversion-report.json", Json(engine.Report));
-    File.WriteAllLines("artifacts/vanilla-conversion-failures.txt", errors);
-    Console.WriteLine($"AUDIT: converted={converted}; preserved barters={existing}; cash loose ammo={ammoCash}; barter ammo boxes={boxes}; failures={failures}");
+    string suffix = tolerance == 0 ? "" : "-variety";
+    File.WriteAllText($"artifacts/vanilla-conversion-report{suffix}.json", Json(engine.Report));
+    File.WriteAllLines($"artifacts/vanilla-conversion-failures{suffix}.txt", errors);
+    Console.WriteLine($"AUDIT: tolerance={tolerance}; converted={converted}; preserved barters={existing}; cash loose ammo={ammoCash}; barter ammo boxes={boxes}; failures={failures}");
     Assert(converted > 100 && ammoCash > 0 && boxes > 0 && failures == 0, "Real-database audit incomplete; inspect artifacts");
 }
 

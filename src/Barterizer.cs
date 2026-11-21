@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "SPTBarterizer";
     public string Author { get; init; } = "forcedroidbrain";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.1.3");
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.0");
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
     public List<string>? Incompatibilities { get; init; }

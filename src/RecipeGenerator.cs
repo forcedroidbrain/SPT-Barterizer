@@ -45,9 +45,7 @@ public static class RecipeGenerator
                     .OrderBy(item => item.Count * item.UnitPrice - remaining)
                     .ThenBy(item => item.Template, StringComparer.Ordinal).ToArray();
                 if (finish.Length == 0) return Fallback();
-                decimal bestOverpay = finish[0].Count * finish[0].UnitPrice - remaining;
-                var tied = finish.Where(item => item.Count * item.UnitPrice - remaining == bestOverpay).ToArray();
-                recipe.Add(tied[random.Next(tied.Length)]);
+                recipe.Add(ChooseCompletion(finish, target - remaining));
                 remaining = 0;
                 break;
             }
@@ -59,16 +57,27 @@ public static class RecipeGenerator
         }
         return remaining <= 0 ? recipe : Fallback();
 
+        Ingredient ChooseCompletion(Ingredient[] ordered, decimal selectedValue)
+        {
+            // Compare complete recipe values, including ingredients already selected.
+            // Zero preserves the old tie set, ordering and number of RNG calls exactly.
+            decimal bestValue = ordered[0].Count * ordered[0].UnitPrice;
+            decimal allowance = (selectedValue + bestValue) * settings.RecipeValueTolerancePercent / 100m;
+            var choices = ordered.Where(item => item.Count * item.UnitPrice <= bestValue + allowance).ToArray();
+            return choices[random.Next(choices.Length)];
+        }
+
         IReadOnlyList<Ingredient>? Fallback()
         {
             // Random early choices must not make a representable price fail. First try a
             // single type; then use the largest available capacities within the type limit.
-            var single = pool.Select(item => new Ingredient(item.Template,
+            var singles = pool.Select(item => new Ingredient(item.Template,
                     Math.Max(1m, decimal.Ceiling(target / item.Price)), item.Price))
                 .Where(item => item.Count <= maxCount)
                 .OrderBy(item => item.Count * item.UnitPrice - target)
-                .ThenBy(item => item.Template, StringComparer.Ordinal).FirstOrDefault();
-            if (single is not null) return [single];
+                .ThenBy(item => item.Template, StringComparer.Ordinal).ToArray();
+            if (singles.Length > 0)
+                return [settings.RecipeValueTolerancePercent == 0 ? singles[0] : ChooseCompletion(singles, 0)];
             var fallback = new List<Ingredient>();
             decimal missing = target;
             foreach (var item in pool.OrderByDescending(item => item.Price).ThenBy(item => item.Template, StringComparer.Ordinal)

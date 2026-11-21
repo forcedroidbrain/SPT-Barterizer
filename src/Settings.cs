@@ -7,6 +7,7 @@ public sealed class Settings
     public bool Enabled { get; set; } = true;
     public string Seed { get; set; } = "barterizer-v1";
     public decimal PriceMultiplier { get; set; } = 1m;
+    public decimal RecipeValueTolerancePercent { get; set; }
     public int MaxDifferentItems { get; set; } = 3;
     public int MaxCountPerItem { get; set; } = 20;
     public int PreferredMaxCountPerItem { get; set; } = 5;
@@ -33,6 +34,7 @@ public sealed class Settings
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(Seed) || PriceMultiplier < 0.01m || PriceMultiplier > 100m
+            || RecipeValueTolerancePercent is < 0 or > 100
             || MaxDifferentItems is < 1 or > 5 || MaxCountPerItem is < 1 or > 10000
             || PreferredMaxCountPerItem is < 1 or > 10000
             || MinimumCashPriceRoubles < 0 || MinimumPaymentItemPrice <= 0

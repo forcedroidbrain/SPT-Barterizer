@@ -6,6 +6,9 @@ $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 Push-Location $repo
 try {
+    [xml]$project = Get-Content -LiteralPath (Join-Path $repo 'src/SPT.Barterizer.csproj') -Raw
+    $version = [string]$project.Project.PropertyGroup.Version
+    if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid package version in project file' }
     dotnet build src/SPT.Barterizer.csproj -c Release "-p:SptRoot=$SptRoot"
     if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
     if (-not $SkipTests) {
@@ -19,8 +22,8 @@ try {
     $modFolder = Join-Path $packageRoot 'SPT_Runtime/user/mods/SPT-Barterizer'
     New-Item -ItemType Directory -Path $modFolder -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo 'src/bin/Release/net10.0/SPT.Barterizer.dll') -Destination $modFolder
-    foreach ($name in @('config.json', 'README.md', 'LICENSE')) { Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $modFolder }
-    $zip = Join-Path $repo 'dist/SPT-Barterizer-0.1.3.zip'
+    foreach ($name in @('config.json', 'README.md', 'RELEASE_NOTES.md', 'LICENSE')) { Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $modFolder }
+    $zip = Join-Path $repo "dist/SPT-Barterizer-$version.zip"
     Compress-Archive -LiteralPath (Join-Path $packageRoot 'SPT_Runtime') -DestinationPath $zip -Force
     Write-Host "Packaged: $zip"
 } finally { Pop-Location }

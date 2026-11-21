@@ -2,6 +2,7 @@
   "enabled": true,
   "seed": "barterizer-v1",
   "priceMultiplier": 1.0,
+  "recipeValueTolerancePercent": 0,
   "maxDifferentItems": 3,
   "maxCountPerItem": 20,
   "preferredMaxCountPerItem": 5,
