@@ -31,7 +31,8 @@ public record ModMetadata : IModMetadata
 
 [Injectable(TypePriority = OnLoadOrder.PostLoad + 100)]
 public sealed class Barterizer(TradersTable traders, TemplateTable templates, HandbookHelper handbook,
-    ISptLogger<Barterizer> logger) : IOnLoad
+    ISptLogger<Barterizer> logger, LocaleTable locales, AmmoBoxTemplateRegistration boxRegistration,
+    SPTarkov.Server.Core.Utils.HttpResponseUtil responses, TraderHelper traderHelper, ProfileHelper profileHelper) : IOnLoad
 {
     internal static Barterizer? Instance { get; private set; }
     private ConversionEngine? engine;
@@ -39,17 +40,31 @@ public sealed class Barterizer(TradersTable traders, TemplateTable templates, Ha
     private readonly HashSet<string> loggedFailures = [];
     private static string Root => Path.GetDirectoryName(typeof(Barterizer).Assembly.Location)!;
 
+    internal static Settings LoadSettings()
+    {
+        var loaded = JsonSerializer.Deserialize<Settings>(File.ReadAllText(Path.Combine(Root, "config.json")), Settings.Json)
+            ?? throw new InvalidDataException("Barterizer config is empty.");
+        loaded.Validate();
+        return loaded;
+    }
+
     public Task OnLoadAsync(CancellationToken cancellationToken)
     {
-        settings = JsonSerializer.Deserialize<Settings>(File.ReadAllText(Path.Combine(Root, "config.json")), Settings.Json)
-            ?? throw new InvalidDataException("Barterizer config is empty.");
-        settings.Validate();
+        settings = LoadSettings();
         if (!settings.Enabled) { logger.Info("[Barterizer] Disabled."); return Task.CompletedTask; }
+        if ((settings.SellAmmoInStackBoxes || settings.SellAmmoInBatches) && boxRegistration.Boxes is null)
+            throw new InvalidOperationException("Ammunition boxes were not registered during preload. Restart with a consistent config.");
         var hardcoreAssembly = AppDomain.CurrentDomain.GetAssemblies()
             .FirstOrDefault(assembly => assembly.GetType("HardcoreRules.Utils.OfferSourceUtils.TraderOffersUtil") is not null);
         var policy = hardcoreAssembly is null ? HardcorePolicy.Empty
             : HardcorePolicy.Read(Path.Combine(Path.GetDirectoryName(hardcoreAssembly.Location)!, "config.json"));
-        engine = new(settings, templates, handbook.GetTemplatePrice, policy);
+        engine = new(settings, templates, handbook.GetTemplatePrice, policy, locales, boxRegistration.Boxes);
+        AmmoBoxTradeAdapter.Active = engine.AmmoBoxes;
+        AmmoBatchTradeAdapter.Active = engine.AmmoBatches;
+        AmmoBatchTradeAdapter.GetRaw = id => traders[id].Assort;
+        AmmoBatchTradeAdapter.Reject = (output, message) => responses.AppendErrorToOutput(output, message);
+        AmmoBatchTradeAdapter.AdjustRoundLimit = (limit, version) => (int)traderHelper.GetAccountTypeAdjustedTraderPurchaseLimit(limit, version);
+        AmmoBatchTradeAdapter.GameVersion = session => profileHelper.GetPmcProfile(session)?.Info?.GameVersion ?? "standard";
         Instance = this;
         var harmony = new Harmony("com.forcedroidbrain.barterizer");
         harmony.PatchAll(typeof(Barterizer).Assembly);
@@ -83,6 +98,7 @@ public sealed class Barterizer(TradersTable traders, TemplateTable templates, Ha
                 if (loggedFailures.Add(failure)) logger.Warning($"[Barterizer] {failure}");
         }
         if (result.Converted == 0) return;
+        if (engine?.AmmoBatches is not null && trader.Base is not null) trader.Base.RefreshTraderRagfairOffers = true;
         logger.Info($"[Barterizer] {trader.Base?.Nickname ?? id.ToString()}: converted {result.Converted} cash offers.");
         if (settings.WriteReport)
         {
@@ -106,6 +122,14 @@ internal static class BeforeAssortPatch
 {
     [HarmonyPrefix, HarmonyPriority(Priority.First)]
     private static void Prefix(MongoId traderId) => Barterizer.Instance?.ConvertTrader(traderId);
+
+    [HarmonyPostfix]
+    private static void Postfix(MongoId sessionId, MongoId traderId, TraderAssort __result)
+    {
+        AmmoBoxTradeAdapter.Active?.AdjustAssortView(traderId.ToString(), __result);
+        AmmoBatchTradeAdapter.Active?.AdjustView(traderId.ToString(), __result,
+            limit => AmmoBatchTradeAdapter.AdjustRoundLimit(limit, AmmoBatchTradeAdapter.GameVersion(sessionId)));
+    }
 }
 
 [HarmonyPatch(typeof(TraderAssortHelper), nameof(TraderAssortHelper.ResetExpiredTrader))]

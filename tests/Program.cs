@@ -188,12 +188,13 @@ Check("tolerance is optional, serialized and validated", () =>
     configured.Validate();
     Assert(configured.RecipeValueTolerancePercent == 25.5m
         && JsonSerializer.Serialize(configured, Settings.Json).Contains("\"recipeValueTolerancePercent\": 25.5"), "Setting does not round-trip");
-    foreach (decimal value in new[] { -0.01m, 100.01m })
+    foreach (decimal value in new[] { -0.01m, 300.01m, decimal.MaxValue })
     {
         try { new Settings { RecipeValueTolerancePercent = value }.Validate(); throw new Exception("Invalid tolerance accepted"); }
         catch (InvalidDataException) { }
     }
-    new Settings { RecipeValueTolerancePercent = 100 }.Validate();
+    foreach (decimal value in new[] { 0m, 100m, 110m, 200m, 300m })
+        new Settings { RecipeValueTolerancePercent = value }.Validate();
 });
 Check("cheap offers gain seeded variety within the inclusive value tolerance", () =>
 {
@@ -220,7 +221,7 @@ Check("cheap offers gain seeded variety within the inclusive value tolerance", (
 Check("enabled variety respects recipe capacity, total value and determinism", () =>
 {
     var pool = new PaymentItem[] { new("a", 500), new("b", 2000), new("c", 8000), new("d", 2200) };
-    foreach (decimal tolerance in new[] { 25m, 100m })
+    foreach (decimal tolerance in new[] { 25m, 100m, 200m, 300m })
     foreach (int slots in new[] { 1, 3 })
     foreach (int cap in new[] { 2, 20 })
     for (int target = 1; target <= 250000; target += 997)
@@ -280,6 +281,15 @@ Check("extreme prices relax preference without exceeding hard limits", () =>
 });
 
 string? sptRoot = args.Length == 2 && args[0] == "--spt-root" ? args[1] : null;
+Check("optional stack-sized boxes preserve defaults and price whole payloads", AmmoBoxChecks.Conversion);
+Check("box templates precede the actual SPT profile integrity cutoff", AmmoBoxChecks.PreloadIntegrity);
+Check("box conversion preserves original barters, exclusions and infeasible offers", AmmoBoxChecks.PreservedOffers);
+Check("box quotas remain rounds and installed purchase hooks bind", AmmoBoxChecks.QuotasAndLocales);
+Check("ammo batches preserve templates, native integrity, defaults and seeded restocks", AmmoBatchChecks.Conversion);
+Check("ammo batch payment validation and flea quantities preserve round accounting", AmmoBatchChecks.PaymentAndFlea);
+Check("client batch display is scoped and all server hooks bind", AmmoBatchChecks.ClientDisplay);
+Check("native batch delivery, payment, quotas, response and failed purchases", NativeBatchChecks.Run);
+Check("OpenBarters batch approvals are scoped, expiring and single use", OpenBartersBatchChecks.Run);
 Check("SPT assortment and restock hooks bind to the installed core", () =>
 {
     var harmony = new Harmony("com.forcedroidbrain.barterizer.core-tests");
@@ -297,6 +307,15 @@ if (sptRoot is not null)
 {
     Check("real SPT 4.1.6 vanilla database audit", () => AuditDatabase(sptRoot));
     Check("real SPT database audit with 25 percent variety", () => AuditDatabase(sptRoot, 25));
+    Check("real loose-ammo offers gain wider seeded variety", () => AuditLooseAmmoVariety(sptRoot));
+    Check("real loose-ammo stack boxes and native cartridge payloads", () => AmmoBoxChecks.RealDatabase(sptRoot));
+    Check("real Prapor PSO batch preserves native magazine linked search", () => AmmoBatchChecks.RealPso(sptRoot));
+    if (File.Exists(Path.Combine(sptRoot, "SPT_Runtime/user/mods/Lotus/data/assort.json")))
+        Check("real Lotus low-limit ammo offers become priced batches", () => AmmoBatchChecks.RealLotus(sptRoot));
+    if (File.Exists(Path.Combine(sptRoot, "SPT_Runtime/user/mods/TGC-NG/db/CustomItems/modTGC_items.json")))
+        Check("installed Painter 90-round batches and legacy-box migration", () => AmmoBoxChecks.RealPainter(sptRoot, true));
+    if (File.Exists(Path.Combine(sptRoot, "SPT_Runtime/user/mods/TGC-NG/db/CustomItems/modTGC_items.json")))
+        Check("installed Painter/TGC 90-round box precedes profile cutoff", () => AmmoBoxChecks.RealPainter(sptRoot));
     if (File.Exists(Path.Combine(sptRoot, "SPT_Runtime/user/mods/HardcoreRules/HardcoreRules-Server.dll")))
         Check("installed HardcoreRules actual cache/filter/restore integration", () => CheckHardcore(sptRoot));
     else Console.WriteLine("SKIP: optional HardcoreRules DLL is not installed.");
@@ -364,6 +383,100 @@ void AuditDatabase(string root, decimal tolerance = 0)
     File.WriteAllLines($"artifacts/vanilla-conversion-failures{suffix}.txt", errors);
     Console.WriteLine($"AUDIT: tolerance={tolerance}; converted={converted}; preserved barters={existing}; cash loose ammo={ammoCash}; barter ammo boxes={boxes}; failures={failures}");
     Assert(converted > 100 && ammoCash > 0 && boxes > 0 && failures == 0, "Real-database audit incomplete; inspect artifacts");
+}
+
+void AuditLooseAmmoVariety(string root)
+{
+    string database = Path.Combine(root, "SPT_Runtime/SPT_Data/database");
+    var templates = JsonSerializer.Deserialize<Dictionary<MongoId, TemplateItem>>(
+        File.ReadAllText(Path.Combine(database, "templates/items.json")), TestJson.Options)!;
+    var handbook = JsonSerializer.Deserialize<HandbookBase>(
+        File.ReadAllText(Path.Combine(database, "templates/handbook.json")), TestJson.Options)!;
+    var prices = handbook.Items.ToDictionary(item => item.Id, item => item.Price ?? 0d);
+    var table = Fixture.TemplateTableWithItems(templates);
+    var inputs = Directory.GetDirectories(Path.Combine(database, "traders"))
+        .Where(folder => File.Exists(Path.Combine(folder, "assort.json")))
+        .OrderBy(folder => folder, StringComparer.Ordinal)
+        .Select(folder => (Trader: JsonSerializer.Deserialize<TraderBase>(
+            File.ReadAllText(Path.Combine(folder, "base.json")), TestJson.Options)!.Id.ToString(),
+            Assort: File.ReadAllText(Path.Combine(folder, "assort.json"))))
+        .ToArray();
+    const string ammo = "5485a8684bdc2da71d8b4567", battery = "5672cb124bdc2d1a0f8b4568";
+    const string defaultSeed = "barterizer-v1";
+    var categoryEngine = new ConversionEngine(new(), table, id => prices.GetValueOrDefault(id));
+    var baseline = ConvertOffers(0, defaultSeed);
+    Assert(Json(baseline) == Json(ConvertOffers(0, defaultSeed, true)), "Default real offers depend on trader order");
+    var originalCheap = baseline.Where(r => IsAmmo(r) && r.TargetRoubles <= (decimal)prices[(MongoId)battery]).ToArray();
+    Assert(originalCheap.Length > 10 && originalCheap.All(r => r.Requirements.Count == 1
+        && r.Requirements[0].Template == battery && r.Requirements[0].Count == 1), "Missing real cheap-ammo battery regression cohort");
+    var runs = new Dictionary<string, IReadOnlyList<ConvertedRecipe>> { ["0"] = baseline };
+    foreach (decimal tolerance in new[] { 100m, 110m, 200m, 300m })
+    {
+        var varied = ConvertOffers(tolerance, defaultSeed);
+        var repeated = ConvertOffers(tolerance, defaultSeed, true);
+        var reseeded = ConvertOffers(tolerance, "cheap-ammo-another-seed");
+        Assert(Json(varied) == Json(repeated), "Real restock/restart or trader order changes recipes");
+        Assert(varied.Count == baseline.Count, "Wider tolerance changes which offers convert");
+        var byOffer = varied.ToDictionary(Key);
+        foreach (var original in baseline)
+        {
+            var current = byOffer[Key(original)];
+            Assert(current.SoldTemplate == original.SoldTemplate && current.TargetRoubles == original.TargetRoubles,
+                "Wider tolerance changes source offer identity or target");
+            Assert(current.BarterRoubles >= current.TargetRoubles
+                && current.BarterRoubles <= original.BarterRoubles * (1 + tolerance / 100), "Real recipe value exceeds tolerance");
+            Assert(current.Requirements.Count <= 3 && current.Requirements.All(i => i.Count >= 1 && i.Count <= 20
+                && i.Count == decimal.Truncate(i.Count) && i.Template != current.SoldTemplate), "Real recipe violates bounds or allows self-payment");
+        }
+        var cheap = originalCheap.Select(r => byOffer[Key(r)]).ToArray();
+        int types = cheap.SelectMany(r => r.Requirements).Select(i => i.Template).Distinct().Count();
+        if (tolerance == 100)
+            Assert(cheap.All(r => r.Requirements.Single().Template == battery), "Old cap no longer reproduces the reported price gap");
+        else
+        {
+            Assert(types > 1, "Expanded range still only generates AA batteries for real cheap ammo");
+            var otherSeedByOffer = reseeded.ToDictionary(Key);
+            Assert(cheap.Any(r => Json(r.Requirements) != Json(otherSeedByOffer[Key(r)].Requirements)),
+                "Changing seed has no effect on real cheap-ammo payments");
+        }
+        runs[tolerance.ToString(System.Globalization.CultureInfo.InvariantCulture)] = varied;
+        Console.WriteLine($"AMMO AUDIT: tolerance={tolerance}; converted ammo={varied.Count(IsAmmo)}; cheap offers={cheap.Length}; cheap ingredient types={types}");
+    }
+    Directory.CreateDirectory("artifacts");
+    File.WriteAllText("artifacts/loose-ammo-variety-report.json", Json(runs));
+
+    bool IsAmmo(ConvertedRecipe recipe) => categoryEngine.InCategories(recipe.SoldTemplate, [ammo]);
+    static string Key(ConvertedRecipe recipe) => $"{recipe.Trader}/{recipe.Offer}/{recipe.Alternative}";
+
+    IReadOnlyList<ConvertedRecipe> ConvertOffers(decimal tolerance, string seed, bool reverse = false)
+    {
+        // Reproduce the commenter's sold-category exclusions, with no Hardcore whitelist.
+        var settings = new Settings { RecipeValueTolerancePercent = tolerance, Seed = seed,
+            ExcludedSoldItemCategories = ["543be5dd4bdc2deb348b4569", "5447e0e74bdc2d3c308b4567", "5795f317245977243854e041"] };
+        var engine = new ConversionEngine(settings, table, id => prices.GetValueOrDefault(id));
+        foreach (var input in reverse ? inputs.Reverse() : inputs)
+        {
+            var assort = JsonSerializer.Deserialize<TraderAssort>(input.Assort, TestJson.Options)!;
+            string before = WithoutPayments(assort);
+            var oldBarters = assort.BarterScheme.Where(pair => pair.Value.Any(scheme =>
+                scheme.Any(req => !ConversionEngine.CashTemplates.Contains(req.Template.ToString()))))
+                .ToDictionary(pair => pair.Key, pair => Json(pair.Value));
+            Assert(engine.Convert(input.Trader, assort).Failures.Count == 0, "Real ammo configuration has conversion failures");
+            Assert(before == WithoutPayments(assort), "Real ammo conversion changed stock, items or restrictions");
+            foreach (var old in oldBarters)
+                Assert(old.Value == Json(assort.BarterScheme[old.Key]), "Real ammo conversion changed an existing barter");
+            string after = Json(assort);
+            Assert(engine.Convert(input.Trader, assort).Converted == 0 && after == Json(assort), "Repeated real ammo conversion changes recipes");
+        }
+        return engine.Report;
+    }
+
+    static string WithoutPayments(TraderAssort assort)
+    {
+        var node = JsonNode.Parse(Json(assort))!.AsObject();
+        node.Remove("barter_scheme");
+        return node.ToJsonString();
+    }
 }
 
 void CheckHardcore(string root)

@@ -5,6 +5,8 @@ namespace SptBarterizer;
 public sealed class Settings
 {
     public bool Enabled { get; set; } = true;
+    public bool SellAmmoInStackBoxes { get; set; }
+    public bool SellAmmoInBatches { get; set; }
     public string Seed { get; set; } = "barterizer-v1";
     public decimal PriceMultiplier { get; set; } = 1m;
     public decimal RecipeValueTolerancePercent { get; set; }
@@ -33,8 +35,10 @@ public sealed class Settings
 
     public void Validate()
     {
+        if (SellAmmoInStackBoxes && SellAmmoInBatches)
+            throw new InvalidDataException("Choose either ammunition batches or legacy boxes, not both.");
         if (string.IsNullOrWhiteSpace(Seed) || PriceMultiplier < 0.01m || PriceMultiplier > 100m
-            || RecipeValueTolerancePercent is < 0 or > 100
+            || RecipeValueTolerancePercent is < 0 or > 300
             || MaxDifferentItems is < 1 or > 5 || MaxCountPerItem is < 1 or > 10000
             || PreferredMaxCountPerItem is < 1 or > 10000
             || MinimumCashPriceRoubles < 0 || MinimumPaymentItemPrice <= 0

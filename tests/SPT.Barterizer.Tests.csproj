@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../client/BatchDisplay.cs" Link="ClientBatchDisplay.cs" />
     <ProjectReference Include="../src/SPT.Barterizer.csproj" />
     <Reference Update="@(Reference)"><Private>true</Private></Reference>
     <Reference Include="$(SptRoot)/SPT_Runtime/user/mods/HardcoreRules/HardcoreRules-Server.dll" Condition="Exists('$(SptRoot)/SPT_Runtime/user/mods/HardcoreRules/HardcoreRules-Server.dll')">

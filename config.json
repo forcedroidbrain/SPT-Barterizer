@@ -1,5 +1,7 @@
 {
   "enabled": true,
+  "sellAmmoInStackBoxes": false,
+  "sellAmmoInBatches": false,
   "seed": "barterizer-v1",
   "priceMultiplier": 1.0,
   "recipeValueTolerancePercent": 0,

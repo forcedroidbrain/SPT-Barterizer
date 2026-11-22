@@ -2,9 +2,9 @@
 
 ![SPT Barterizer cover art](assets/forge-icon.png)
 
-A server mod for **SPT 4.1.6** that turns cash offers into ordinary item barters. Designed to complement [OpenBarters](https://github.com/forcedroidbrain/OpenBarters/tree/feature/partial-barter-price-multiplier) and [HardcoreRules](https://github.com/dwesterwick/SPTHardcoreRules).
+A mod for **SPT 4.1.6** that turns cash offers into ordinary item barters, with a client companion for optional ammunition batches. Designed to complement [OpenBarters](https://github.com/forcedroidbrain/OpenBarters/tree/feature/partial-barter-price-multiplier) and [HardcoreRules](https://github.com/dwesterwick/SPTHardcoreRules).
 
-Version **0.2.0**. Built against SPT 4.1.6. Automated checks cover the SPT database at default settings and with barter variety enabled, and the installed HardcoreRules 3.1.0 DLL. Runtime server loading and in-game purchasing have not yet been verified for this version.
+Version **0.2.0**, updated November 22, 2026. This replaces the original November 21 release with expanded variety, optional ammunition batches, a client companion and OpenBarters compatibility fixes. Automated checks cover native SPT purchases, client patch bindings and the installed HardcoreRules 3.1.0/OpenBarters 1.1.0 APIs. Both plugins loaded in a live SPT 4.1.6 session; a 300-round Prapor batch purchase through OpenBarters confirmed payment, delivered rounds, remaining quota and the corrected UI layout. Other traders and flea purchases have not all been checked in gameplay.
 
 ## Behavior
 
@@ -15,7 +15,35 @@ Version **0.2.0**. Built against SPT 4.1.6. Automated checks cover the SPT datab
 - Uses a stable seed, trader ID, offer ID and alternative index. Recipes stay the same across restocks and restarts with the same configuration and payment pool.
 - Prevents the item being sold, and its attached items, from becoming their own payment ingredients.
 
-**Loose ammunition stays a cash offer.** HardcoreRules can hide it as usual. **Factory ammunition boxes are eligible for conversion**; existing ammunition-box barters stay unchanged. This distinction uses the Ammo and AmmoBox template categories, not price or stack size.
+**Loose ammunition stays a cash offer by default.** HardcoreRules can hide it as usual. **Factory ammunition boxes are eligible for conversion**; existing ammunition-box barters stay unchanged. This distinction uses the Ammo and AmmoBox template categories, not price or stack size.
+
+### Optional ammunition batches
+
+Set `sellAmmoInBatches` to `true` and keep `sellAmmoInStackBoxes` at `false`. Install both the server DLL and the client companion, then restart the server and game. Each purchase unit is a fixed batch of loose rounds: the smaller of `StackMaxSize` and a positive original purchase limit. A 250-round stack gives a 250-round batch; a 100-round stack with a 75-round purchase limit gives a 75-round batch. Both options default to `false`, including in older configs.
+
+The barter target is the original per-round cash price multiplied by the actual batch size, then `priceMultiplier` is applied. Seed selection and recipe variety remain deterministic. One selected purchase unit pays one whole-batch recipe; two pay twice that recipe. Trader/flea quantities show batches and the client labels their size and total rounds. The original ammunition template and offer ID are retained, so compatible-magazine linked searches keep finding the offer. Existing barters, other exclusions and HardcoreRules exemptions still apply; only the explicit Ammo entry in `excludedSoldItemCategories` is overridden.
+
+Server stock and saved purchase history remain in rounds. Existing purchases and native edition bonuses are counted before dividing into full batches; neither limits nor counters are reset. Stock/quota leftovers smaller than one batch are unavailable until the next reset. Missing client support, invalid quantities, insufficient quota/stock and incorrect whole-batch payments are rejected. NPC/player flea offers outside converted trader offers are unaffected.
+
+OpenBarters substitutions are supported through the companion: it uses the installed OpenBarters basket valuation and settings, including its partial-substitution policy when available. A validated basket is bound to that purchase before the server translates batches into rounds. Native exact-recipe purchases keep their existing validation. OpenBarters itself and its configuration are not replaced. Both the installed 1.1.0 `GetRequiredValue`/`GetBasketValue` API and the newer `GetBarterValue().CanTrade` API are supported.
+
+The trader's batch information occupies its own row in the scrolling buy-panel layout. Native deal-button and equivalent-price labels remain under the game's/OpenBarters' control. Flea rows retain the batch-size suffix.
+
+Batch sales create no item templates or boxes. For migration from the previous experimental box mode, the early registration service retains legacy full-stack box definitions while batch mode is on, so saved boxes can still be unpacked. Keep the same ammunition mods and stack-size configuration while any saved boxes remain. Unpack those boxes before disabling both ammo modes, uninstalling, or reverting to a published version without legacy-box support. Ordinary loose rounds need no migration.
+
+Automated checks execute native SPT delivery, round quotas, payment removal and flea rejection paths against an in-memory test profile; they also check real Lotus/Painter data and bind the client patches to the installed game DLL. Live verification covered one Prapor OpenBarters exchange: one substitute scope paid, 300 loose rounds delivered and two more 300-round batches available under a 1000-round limit. The batch label occupied a separate row without overlapping the deal button. This does not establish gameplay coverage for every trader, batch size or flea transaction.
+
+### Legacy stack-sized ammunition boxes
+
+Set `sellAmmoInStackBoxes` to `true` and restart the server to replace eligible cash offers of loose ammunition with unpackable boxes. Each box contains exactly that cartridge's `StackMaxSize` rounds (for example, 50 or 60). The barter is generated from the original per-round cash cost multiplied by the number of rounds in the box, then `priceMultiplier` is applied. Seeded selection and `recipeValueTolerancePercent` work as usual. The default `false`, including older configs that omit this setting, preserves existing behavior.
+
+Enabling this option overrides only the Ammo category entry in `excludedSoldItemCategories`. Other item/category/trader exclusions, quest items, HardcoreRules exemptions and existing barters still apply. Existing factory boxes are not repacked. Offer IDs, loyalty levels and quest mappings remain unchanged. Stock is rounded down to whole boxes; leftover rounds cannot be purchased through that offer. Offers without enough stock or a sufficient positive purchase limit for a full box remain unchanged and produce a warning.
+
+Purchase limits and previous purchases remain measured in rounds in the profile. The purchase hooks validate boxes against that round limit and record the actual number of rounds bought; the trader view displays box counts. Already purchased rounds are counted when the mode is enabled. Switching modes does not reset the saved purchase counters.
+
+These are new item templates using existing game box assets. **Unpack every generated box before disabling this option or uninstalling Barterizer.** Keep the same ammunition mods and stack-size configuration while saved boxes exist. The server registers box templates for unavailable/sold-out ammunition too while this option is enabled. Box appearance uses an available native box asset and may not match the printed cartridge label; use the localized item name and contents. Generated boxes cannot be listed or requested on the flea market. In-game purchasing and unpacking still require verification; automated checks include native SPT cartridge filling, quota adapters and restock simulation.
+
+Box templates register after trader registration (including TGC/Painter ammunition), just before handbook callbacks and before profiles load; trader conversion still runs after other mods. No new item IDs may be added after the profile-loading cutoff. If another mod adds ammunition or changes its stack size after box registration, that offer is left unchanged with a diagnostic instead of adding a late template.
 
 Fence and Lightkeeper, currency exchanges, quest items and special-item categories are excluded by default. Other custom traders use the same rules as vanilla traders.
 
@@ -26,6 +54,8 @@ The target recipe value is the original cash cost converted to roubles using han
 The generator uses positive, whole item counts. Recipe value meets or exceeds the target; integer rounding can make cheap offers noticeably more expensive. It tries a varied recipe, then falls back to a valid bounded recipe if random choices cannot finish it. If the pool or configured limits cannot represent a price, the original cash offer is left unchanged and a warning is logged.
 
 For more variety, set `recipeValueTolerancePercent` to e.g. `25` and restart the server. When finishing a recipe, the generator randomly chooses among options whose complete recipe value is within 25% above the cheapest valid completion, including ingredients already selected. For example, if the cheapest completion makes a 1000-rouble recipe, alternatives up to 1250 roubles are eligible. This also applies to single-item fallback recipes; the multi-item capacity fallback is unchanged. Values use handbook prices, not market or trader resale prices. The tolerance is relative to the cheapest completion at that step, not the original cash cost or a globally optimal recipe; rounding can already make that completion exceed the cash target. Variety requires multiple eligible options and is not guaranteed for every offer. The same seed, configuration, offer IDs and payment pool still produce the same recipes. `0` (or an omitted setting) preserves the previous recipes exactly.
+
+For very cheap offers, `25` or even `100` can still leave only one eligible ingredient. In the SPT 4.1.6 handbook, an AA battery costs 652 roubles and a Crickent lighter costs 1320: the lighter is outside a 100% allowance (1304). The expanded range supports `200` (up to three times the cheapest completion value) and `300` (up to four times) for a wider choice. These values can substantially increase payment costs. Loose ammunition remains excluded by default; enable `sellAmmoInBatches` for fixed batches, or remove Ammo (`5485a8684bdc2da71d8b4567`) from `excludedSoldItemCategories` for individual-round conversion. Preserve your existing configuration and restart the server after changes. The original November 21 build of 0.2.0 supported only 0–100; download the updated package for the expanded range and ammunition modes.
 
 The server does not apply OpenBarters' substitute surcharge. With our OpenBarters branch, bringing the requested ingredients closes their part of the recipe at full credit; only the missing part gets its F12 multiplier (default **1.5**). The effective cost of substitutes also depends on the trader's sell-tab prices.
 
@@ -45,29 +75,31 @@ The compatibility check uses the actual installed HardcoreRules 3.1.0 cache/filt
 
 ## Installation
 
-1. Close the SPT server.
-2. Extract `SPT-Barterizer-0.2.0.zip` into the SPT root. The mod folder is `SPT_Runtime/user/mods/SPT-Barterizer/`.
+1. Close the SPT server and game.
+2. Extract the package into the SPT root. Server files go into `SPT_Runtime/user/mods/SPT-Barterizer/`; the companion is `BepInEx/plugins/SPT-Barterizer/SPT.Barterizer.Client.dll`.
 3. Edit that folder's `config.json` if desired, then start the server.
 4. Inspect `[Barterizer]` startup messages and `conversion-report.json` in the mod folder. Check a normal converted offer, an existing barter, a cash medicine exception, loose ammunition, and an ammunition box before continuing a playthrough.
 
-No BepInEx plugin is included. This package does not install or replace OpenBarters or HardcoreRules, and it does not edit their configs.
+The client companion is required for optional batch sales and passive when they are disabled. This package does not install or replace OpenBarters or HardcoreRules, and it does not edit their configs.
 
 When upgrading, back up your existing mod folder and keep your current `config.json` instead of replacing it with the ZIP's defaults. The new `recipeValueTolerancePercent` setting defaults to `0` when omitted. Add it with a value such as `25` to enable variety, then restart the server.
 
-A VirusTotal scan report for the v0.2.0 DLL is pending. The v0.1.3 scan does not cover this version; obtain a new report before publishing executable content on Forge.
+VirusTotal reports for these replacement server/client DLLs are pending. The original 0.2.0 server DLL report does not cover these binaries. Use the attached `SHA256SUMS-0.2.0.txt` to identify the exact replacement files.
 
-To uninstall, remove the Barterizer folder while the server is stopped, then restart. Do not remove purchased items from the profile.
+To uninstall, unpack any legacy generated boxes first, close the game/server, and remove the server folder and companion DLL. Ordinary loose rounds and saved purchase counters remain valid.
 
 ## Configuration
 
-Changes require a server restart.
+Changes require a server restart. For the optional box mode, unpack saved generated boxes before turning it off.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `true` | Enable conversion and hooks |
+| `sellAmmoInStackBoxes` | `false` | Replace eligible cash loose-ammo offers with unpackable, stack-sized boxes; whole-box prices, round-based purchase history |
+| `sellAmmoInBatches` | `false` | Sell eligible loose ammunition in fixed batches without boxes; requires the client companion; mutually exclusive with legacy box mode |
 | `seed` | `barterizer-v1` | Stable recipe seed; change it to regenerate recipes on restart |
 | `priceMultiplier` | `1.0` | Base recipe cost; separate from the OpenBarters substitute multiplier |
-| `recipeValueTolerancePercent` | `0` | Extra value allowed above the cheapest completion for seeded variety, range 0–100 percent; `0` preserves previous recipes |
+| `recipeValueTolerancePercent` | `0` | Extra value allowed above the cheapest completion for seeded variety, range 0–300 percent; `0` preserves previous recipes |
 | `maxDifferentItems` | `3` | Maximum ingredient types per recipe, range 1–5 |
 | `maxCountPerItem` | `20` | Hard maximum count of each ingredient |
 | `preferredMaxCountPerItem` | `5` | Prefer this count or less by choosing higher-value ingredients; relax only if the target cannot be covered within the available ingredient types and prices. Never exceeds the hard maximum |
@@ -92,7 +124,7 @@ Requires PowerShell 7, .NET 10 SDK and a local SPT 4.1.6 installation. No NuGet 
 pwsh -File tools/Build.ps1 -SptRoot 'D:\SPT4'
 ```
 
-This builds the DLL, runs the test suite and packages `dist/SPT-Barterizer-0.2.0.zip`. The package version is read from the project file. It **does not deploy** to the game. The optional `-SkipTests` switch only builds and packages.
+This builds both DLLs, runs the server/native transaction checks and client binding checks, and packages `dist/SPT-Barterizer-0.2.0.zip`. The package version is read from the project file. It **does not deploy** to the game. The optional `-SkipTests` switch only builds and packages.
 
 The tests exercise actual SPT models and serializers. `--spt-root` checks the real vanilla database and, when present, the installed HardcoreRules DLL. They run entirely in the test process: they do not launch the server or alter profiles, installed mods or database files. Test failures are caught and reported to the console with a nonzero exit status.
 
@@ -110,7 +142,8 @@ OpenAI Codex was used to help develop and revise the C# code, automated tests an
 
 ## Changelog
 
-- **0.2.0:** Added optional `recipeValueTolerancePercent` (0–100) for seeded variety among similarly priced recipe completions. The default `0`, including older configs without the setting, preserves previous recipes. Existing barters and offer restrictions remain unchanged.
+- **0.2.0 (November 22 replacement):** Expanded `recipeValueTolerancePercent` to 0–300 for cheap offers; added optional `sellAmmoInBatches`, the client companion, preserved linked search and round-based purchase accounting. Fixed OpenBarters substitute payments and overlapping UI text. Includes optional legacy `sellAmmoInStackBoxes` and early template registration compatible with database integrity checks. Both ammo modes default to `false`; seeded recipes and existing barters retain their default behavior.
+- **0.2.0 (November 21 original):** Added optional `recipeValueTolerancePercent` (0–100) for seeded variety among similarly priced recipe completions. The default `0`, including older configs without the setting, preserves previous recipes. Existing barters and offer restrictions remain unchanged.
 - **0.1.3:** Aligned the server metadata name with Forge naming rules and expanded documentation, attribution, support and AI disclosure. Barter-generation behavior is unchanged.
 - **0.1.2:** Prefer at most five of each ingredient by selecting more valuable items. Expensive offers that cannot meet this preference may use more, up to the existing hard limit.
 - **0.1.1:** Exclude all dynamic dogtag templates from newly generated payment recipes. Existing dogtag barters remain unchanged.

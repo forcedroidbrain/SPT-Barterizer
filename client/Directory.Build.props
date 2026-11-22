@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <SptRoot Condition="'$(SptRoot)' == ''">D:/SPT4</SptRoot>
+    <ManagedDir>$(SptRoot)/EscapeFromTarkov_Data/Managed</ManagedDir>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><AssemblyName>SPT.Barterizer.Client</AssemblyName><Version>0.2.0</Version></PropertyGroup>
+  <ItemGroup>
+    <Reference Include="$(SptRoot)/BepInEx/core/BepInEx.dll" />
+    <Reference Include="$(SptRoot)/BepInEx/core/0Harmony.dll" />
+    <Reference Include="$(SptRoot)/BepInEx/plugins/spt/spt-common.dll" />
+    <Reference Include="$(ManagedDir)/Assembly-CSharp.dll" />
+    <Reference Include="$(ManagedDir)/Comfort.dll" />
+    <Reference Include="$(ManagedDir)/UnityEngine.dll" />
+    <Reference Include="$(ManagedDir)/UnityEngine.CoreModule.dll" />
+    <Reference Include="$(ManagedDir)/UnityEngine.UI.dll" />
+    <Reference Include="$(ManagedDir)/Unity.TextMeshPro.dll" />
+    <Reference Include="$(ManagedDir)/Newtonsoft.Json.dll" />
+    <Reference Include="$(ManagedDir)/Sirenix.Serialization.dll" />
+    <Reference Update="@(Reference)"><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
