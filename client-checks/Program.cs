@@ -3,6 +3,7 @@ using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Collections;
 using System.Runtime.Loader;
+using System.Text.Json;
 using HarmonyLib;
 
 string root = args.Length > 0 ? args[0] : "D:/SPT4";
@@ -161,8 +162,30 @@ static void CheckBasketCapture(Type controller, object instance, Assembly client
     var prior = currentField.GetValue(null);
     var priorAssort = assortField.GetValue(null);
     var basket = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(itemType, itemType))!;
-    var original = Item("600000000000000000000001", 1, "200000000000000000000003");
+    var original = Item("600000000000000000000001", 2, "200000000000000000000003");
+    var exact = Item("600000000000000000000003", 2, "200000000000000000000005");
     basket.Add(Item("600000000000000000000002", 1, "200000000000000000000003"), original);
+    var bridge = client.GetType("SptBarterizer.Client.OpenBartersBridge", true)!;
+    var matches = AccessTools.Method(bridge, "Matches");
+    var referenceType = matches.GetParameters()[4].ParameterType.GetElementType()!;
+    object Reference(object item, int count)
+    {
+        var reference = Activator.CreateInstance(referenceType)!;
+        AccessTools.Field(referenceType, "Item").SetValue(reference, item);
+        AccessTools.Field(referenceType, "Count").SetValue(reference, count);
+        return reference;
+    }
+    var requisiteType = game.GetType("EFT.Trading.Requisite", true)!;
+    var req = RuntimeHelpers.GetUninitializedObject(requisiteType);
+    var preparedField = AccessTools.Field(requisiteType, "PreparedItems");
+    var prepared = (IList)Activator.CreateInstance(preparedField.FieldType)!;
+    prepared.Add(Reference(original, 1));
+    prepared.Add(Reference(exact, 2));
+    preparedField.SetValue(req, prepared);
+    var requisitesField = AccessTools.Field(assortType, "CurrentRequisites");
+    var requisites = (IList)Activator.CreateInstance(requisitesField.FieldType)!;
+    requisites.Add(req);
+    requisitesField.SetValue(assort, requisites);
     AccessTools.Field(controller, "BarterItems").SetValue(instance, basket);
     currentField.SetValue(null, instance); assortField.SetValue(null, assort);
     var display = client.GetType("SptBarterizer.Client.BatchDisplay", true)!;
@@ -186,23 +209,26 @@ static void CheckBasketCapture(Type controller, object instance, Assembly client
         // Simulate PurchaseBarter selecting null and clearing the final-stock basket.
         AccessTools.Property(assortType, "SelectedItem").SetValue(assort, null);
         basket.Clear();
-        var bridge = client.GetType("SptBarterizer.Client.OpenBartersBridge", true)!;
-        var matches = AccessTools.Method(bridge, "Matches");
-        var referenceType = matches.GetParameters()[4].ParameterType.GetElementType()!;
-        var reference = Activator.CreateInstance(referenceType)!;
-        AccessTools.Field(referenceType, "Item").SetValue(reference, original);
-        AccessTools.Field(referenceType, "Count").SetValue(reference, 1);
-        var references = Array.CreateInstance(referenceType, 1); references.SetValue(reference, 0);
+        prepared.Clear();
+        var references = Array.CreateInstance(referenceType, 3);
+        references.SetValue(Reference(original, 1), 0);
+        references.SetValue(Reference(original, 1), 1);
+        references.SetValue(Reference(exact, 2), 2);
         object?[] matching = [payment, trader, offerId, 1, references, null];
-        if (matches.Invoke(null, matching) is not true) throw new Exception("Final-stock deselection lost the approved basket");
+        if (matches.Invoke(null, matching) is not true || ((Array)matching[5]!).Length != 2)
+            throw new Exception("Mixed OpenBarters payment does not match the captured basket after final-stock deselection");
         matching[3] = 2;
         if (matches.Invoke(null, matching) is not false) throw new Exception("Changed batch count retained approval");
+        matching[3] = 1;
+        references.SetValue(Reference(exact, 1), 2);
+        if (matches.Invoke(null, matching) is not false) throw new Exception("Changed prepared stack retained approval");
+        references.SetValue(Reference(exact, 2), 2);
         var banner = client.GetType("SptBarterizer.Client.BatchPlugin", true)!;
         if (PatchProcessor.GetOriginalInstructions(AccessTools.Method(banner, "TraderBanner"))
             .Any(i => i.operand is FieldInfo field && field.Name == "_equivalentSumValue"))
             throw new Exception("Batch banner still touches native price/button labels");
         CheckPurchaseSend(client, game, trader, offerId, references);
-        Console.WriteLine("PASS: actual client/OpenBarters objects capture substitutes before final-stock deselection; changed quantity rejected; native price labels untouched.");
+        Console.WriteLine("PASS: installed OpenBarters mixed payments survive final-stock deselection and reject changed items or quantities.");
     }
     finally
     {
@@ -226,12 +252,22 @@ static void CheckPurchaseSend(Assembly client, Assembly game, string trader, str
         hook.Patch(AccessTools.Method(http, "PostJsonAsync"), prefix: new HarmonyMethod(typeof(OpenBartersSendProbe), nameof(OpenBartersSendProbe.Post)));
         hook.Patch(confirm, transpiler: new HarmonyMethod(typeof(OpenBartersSendProbe), nameof(OpenBartersSendProbe.NativeBody)));
         OpenBartersSendProbe.Calls = 0;
+        OpenBartersSendProbe.Posts = 0;
         var concrete = game.GetType("EFT.EftClientBackendSession", true)!;
         var result = (Task)confirm.Invoke(RuntimeHelpers.GetUninitializedObject(concrete), [trader, offer, 1, 0, references])!;
         result.GetAwaiter().GetResult();
-        if (OpenBartersSendProbe.Calls != 1 || !OpenBartersSendProbe.Json.Contains("\"quantity\":1")
+        if (OpenBartersSendProbe.Calls != 1 || OpenBartersSendProbe.Posts != 1
             || OpenBartersSendProbe.Route != "/barterizer/ammo-batches/openbarters-payment/v1")
-            throw new Exception($"OpenBarters send probe: calls={OpenBartersSendProbe.Calls}, route={OpenBartersSendProbe.Route}, json={OpenBartersSendProbe.Json}");
+            throw new Exception("Expected one approval request followed by one native confirmation");
+        using var json = JsonDocument.Parse(OpenBartersSendProbe.Json);
+        var payment = json.RootElement;
+        var items = payment.GetProperty("items").EnumerateArray()
+            .ToDictionary(i => i.GetProperty("id").GetString()!, i => i.GetProperty("count").GetDouble());
+        if (payment.GetProperty("trader").GetString() != trader || payment.GetProperty("offer").GetString() != offer
+            || payment.GetProperty("quantity").GetInt32() != 1 || items.Count != 2
+            || items.GetValueOrDefault("600000000000000000000001") != 2
+            || items.GetValueOrDefault("600000000000000000000003") != 2)
+            throw new Exception("Approval request did not include the exact mixed basket");
         Console.WriteLine("PASS: actual confirmation hook approves a captured basket then sends exactly one native transaction (HTTP/transport stubbed).");
     }
     finally { hook.UnpatchSelf(); }
@@ -252,6 +288,7 @@ public sealed class ModernPricingProbe(bool accepted)
 public static class OpenBartersSendProbe
 {
     public static int Calls;
+    public static int Posts;
     public static object NativeTask = null!;
     public static string Json = "", Route = "";
     public static void Record() => Calls++;
@@ -263,6 +300,8 @@ public static class OpenBartersSendProbe
     ];
     public static bool Post(string __0, string __1, ref Task<string> __result)
     {
+        if (Calls != 0) throw new Exception("Native confirmation started before payment approval");
+        Posts++;
         Route = __0; Json = __1;
         __result = Task.FromResult("{\"Accepted\":true}");
         return false;

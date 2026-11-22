@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><AssemblyName>SPT.Barterizer.Client</AssemblyName><Version>0.2.0</Version></PropertyGroup>
+  <PropertyGroup><AssemblyName>SPT.Barterizer.Client</AssemblyName><Version>0.2.1</Version></PropertyGroup>
   <ItemGroup>
     <Reference Include="$(SptRoot)/BepInEx/core/BepInEx.dll" />
     <Reference Include="$(SptRoot)/BepInEx/core/0Harmony.dll" />

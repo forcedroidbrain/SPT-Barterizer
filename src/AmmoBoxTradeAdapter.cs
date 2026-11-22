@@ -28,6 +28,16 @@ public static class AmmoBoxTradeAdapter
                 ? purchase with { Count = AmmoBoxService.ToRounds(purchase.Count, box.Size) } : purchase;
         }).ToList() };
     }
+
+    public static void PreparePurchase(ref PurchaseDetails details, ref Item item)
+    {
+        var box = Active?.Find(details.TraderId.ToString(), item.Id.ToString());
+        details = AdjustPurchase(details, item);
+        // SPT checks the limit again while persisting the round-based history.
+        // Keep the raw trader offer and its box-based stock/display limit intact.
+        if (box is not null && item.Template.ToString() == box.Box && item.Upd is not null)
+            item = item with { Upd = item.Upd with { BuyRestrictionMax = box.LimitRounds } };
+    }
 }
 
 [HarmonyPatch(typeof(TradeHelper), "CheckPurchaseIsWithinTraderItemLimit")]
@@ -42,6 +52,6 @@ internal static class AmmoBoxLimitPatch
 internal static class AmmoBoxPurchasePatch
 {
     [HarmonyPrefix]
-    private static void Prefix(ref PurchaseDetails newPurchaseDetails, Item itemPurchased)
-        => newPurchaseDetails = AmmoBoxTradeAdapter.AdjustPurchase(newPurchaseDetails, itemPurchased);
+    private static void Prefix(ref PurchaseDetails newPurchaseDetails, ref Item itemPurchased)
+        => AmmoBoxTradeAdapter.PreparePurchase(ref newPurchaseDetails, ref itemPurchased);
 }

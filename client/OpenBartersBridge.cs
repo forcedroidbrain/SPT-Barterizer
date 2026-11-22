@@ -35,17 +35,19 @@ public static class OpenBartersBridge
     public static Type? Controller => AppDomain.CurrentDomain.GetAssemblies()
         .Select(a => a.GetType("OpenBarters.Controllers.OpenBarterController", false)).FirstOrDefault(t => t != null);
 
+    private static MethodInfo? FindModernValuation(Type type) =>
+        type.GetMethod("GetBarterValue", AccessTools.all, null, Type.EmptyTypes, null);
+
     public static bool CanTrade(object controller)
     {
         var type = controller.GetType();
-        var modern = AccessTools.Method(type, "GetBarterValue");
+        var modern = FindModernValuation(type);
         if (modern != null)
         {
             var value = modern.Invoke(controller, null);
             return value != null && AccessTools.Property(value.GetType(), "CanTrade")?.GetValue(value) is true;
         }
-        // Installed 1.1.0 uses the same comparison in PurchaseBarter and its deal
-        // button. Read its values rather than approximating trader prices here.
+        // Legacy OpenBarters values the prepared requisites and substitutes separately.
         var required = AccessTools.Method(type, "GetRequiredValue")?.Invoke(controller, null);
         var basket = AccessTools.Method(type, "GetBasketValue")?.Invoke(controller, null);
         if (required is not int cost || cost <= 0 || basket == null) return false;
@@ -61,52 +63,44 @@ public static class OpenBartersBridge
         var assort = AccessTools.Field(type, "TraderAssortment")?.GetValue(null) as Assortment;
         var selected = assort?.SelectedItem;
         if (assort == null || selected == null || assort.TransactionInProgress
-            || AccessTools.Field(type, "BarterItems")?.GetValue(controller) is not IDictionary basket) return null;
+            || assort.CurrentQuantity <= 0 || BatchDisplay.Find(assort._traderId, selected.Id, selected.TemplateId) == null
+            || AccessTools.Method(type, "ToggleActive")?.Invoke(null, null) is not true
+            || AccessTools.Field(type, "BarterItems")?.GetValue(controller) is not IDictionary basket || basket.Count == 0
+            || !CanTrade(controller)) return null;
+
         var references = new List<TradingItemReference>();
         foreach (DictionaryEntry entry in basket)
-            if (entry.Key is EFT.InventoryLogic.Item clone && entry.Value is EFT.InventoryLogic.Item original)
-                references.Add(new TradingItemReference { Item = original, Count = clone.StackObjectsCount });
-        return TryCapture(assort._traderId, selected.Id, assort.CurrentQuantity, references.ToArray(), out var payment, out _) ? payment : null;
+        {
+            if (entry.Key is not EFT.InventoryLogic.Item clone || entry.Value is not EFT.InventoryLogic.Item original) return null;
+            references.Add(new TradingItemReference { Item = original, Count = clone.StackObjectsCount });
+        }
+
+        // The legacy purchase includes the vanilla slots. The modern purchase
+        // allocates exact items inside its basket and sends only that basket.
+        if (FindModernValuation(type) == null)
+            references.AddRange(assort.CurrentRequisites.SelectMany(requirement => requirement.PreparedItems));
+        if (references.Any(i => i.Item == null || i.Count <= 0)) return null;
+
+        return new OpenBartersBatchPayment
+        {
+            Trader = assort._traderId,
+            Offer = selected.Id,
+            Quantity = assort.CurrentQuantity,
+            Items = Normalize(references).Select(i => new BatchPaymentItem { Id = i.Item.Id, Count = i.Count }).ToList()
+        };
     }
+
+    private static TradingItemReference[] Normalize(IEnumerable<TradingItemReference> items) =>
+        items.GroupBy(i => i.Item.Id).Select(g => new TradingItemReference
+            { Item = g.First().Item, Count = checked(g.Sum(i => i.Count)) }).ToArray();
 
     public static bool Matches(OpenBartersBatchPayment payment, string trader, string item, int count,
         TradingItemReference[] items, out TradingItemReference[] normalized)
     {
-        normalized = items.GroupBy(i => i.Item.Id).Select(g => new TradingItemReference
-            { Item = g.First().Item, Count = checked(g.Sum(i => i.Count)) }).ToArray();
+        normalized = Normalize(items);
         return payment.Trader == trader && payment.Offer == item && payment.Quantity == count
             && normalized.Length == payment.Items.Count && normalized.All(i => i.Count > 0
                 && payment.Items.Any(p => p.Id == i.Item.Id && p.Count == i.Count));
-    }
-
-    public static bool TryCapture(string traderId, string itemId, int count, TradingItemReference[] items,
-        out OpenBartersBatchPayment payment, out TradingItemReference[] normalized)
-    {
-        payment = new OpenBartersBatchPayment();
-        normalized = items;
-        var type = Controller;
-        if (type == null || count <= 0) return false;
-        var assortment = AccessTools.Field(type, "TraderAssortment")?.GetValue(null) as Assortment;
-        var selected = assortment?.SelectedItem;
-        if (selected == null || assortment!._traderId != traderId || selected.Id != itemId || assortment.CurrentQuantity != count
-            || BatchDisplay.Find(traderId, itemId, selected.TemplateId) == null) return false;
-        var current = AccessTools.Property(type, "Current")?.GetValue(null);
-        if (current == null || AccessTools.Method(type, "ToggleActive")?.Invoke(null, null) is not true) return false;
-        if (AccessTools.Field(type, "BarterItems")?.GetValue(current) is not IDictionary basket || basket.Count == 0) return false;
-        var expected = new Dictionary<string, double>(StringComparer.Ordinal);
-        foreach (DictionaryEntry entry in basket)
-        {
-            if (entry.Key is not EFT.InventoryLogic.Item clone || entry.Value is not EFT.InventoryLogic.Item original) return false;
-            expected[original.Id] = expected.TryGetValue(original.Id, out var prior) ? prior + clone.StackObjectsCount : clone.StackObjectsCount;
-        }
-        normalized = items.GroupBy(i => i.Item.Id).Select(g => new TradingItemReference
-            { Item = g.First().Item, Count = checked(g.Sum(i => i.Count)) }).ToArray();
-        if (normalized.Length != expected.Count || normalized.Any(i => i.Count <= 0
-            || !expected.TryGetValue(i.Item.Id, out var total) || total != i.Count)) return false;
-        if (!CanTrade(current)) return false;
-        payment = new OpenBartersBatchPayment { Trader = traderId, Offer = itemId, Quantity = count,
-            Items = normalized.Select(i => new BatchPaymentItem { Id = i.Item.Id, Count = i.Count }).ToList() };
-        return true;
     }
 }
 

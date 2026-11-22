@@ -20,7 +20,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "SPTBarterizer";
     public string Author { get; init; } = "forcedroidbrain";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("0.2.0");
+    public SemanticVersioning.Version Version { get; init; } = new("0.2.1");
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.6");
     public Dictionary<string, SemanticVersioning.Range>? ModDependencies { get; init; }
     public List<string>? Incompatibilities { get; init; }
@@ -36,6 +36,7 @@ public sealed class Barterizer(TradersTable traders, TemplateTable templates, Ha
 {
     internal static Barterizer? Instance { get; private set; }
     private ConversionEngine? engine;
+    private ItemInfoBridge? itemInfo;
     private Settings settings = new();
     private readonly HashSet<string> loggedFailures = [];
     private static string Root => Path.GetDirectoryName(typeof(Barterizer).Assembly.Location)!;
@@ -71,6 +72,14 @@ public sealed class Barterizer(TradersTable traders, TemplateTable templates, Ha
         bool hardcoreBound = HardcoreBridge.Attach(harmony, ConvertAll, ConvertAll);
         cancellationToken.ThrowIfCancellationRequested();
         ConvertAll();
+        var itemInfoAssembly = AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(assembly => assembly.GetType("ItemInfo.Utils") is not null);
+        if (itemInfoAssembly is not null)
+        {
+            if (ItemInfoBridge.Attach(harmony, itemInfoAssembly, templates, engine.Report, out itemInfo))
+                logger.Info("[Barterizer] ItemInfo compatibility enabled: safe box prices and bounded barter descriptions.");
+            else logger.Warning("[Barterizer] ItemInfo API is unsupported; compatibility hooks were not installed.");
+        }
         logger.Info($"[Barterizer] Ready; {engine.Report.Count} generated recipes; " +
                     $"HardcoreRules cache/filter integration: {hardcoreBound}; existing barters and offer IDs preserved.");
         if (policy.WhitelistOnly)
@@ -98,6 +107,7 @@ public sealed class Barterizer(TradersTable traders, TemplateTable templates, Ha
                 if (loggedFailures.Add(failure)) logger.Warning($"[Barterizer] {failure}");
         }
         if (result.Converted == 0) return;
+        itemInfo?.Refresh(engine!.Report);
         if (engine?.AmmoBatches is not null && trader.Base is not null) trader.Base.RefreshTraderRagfairOffers = true;
         logger.Info($"[Barterizer] {trader.Base?.Nickname ?? id.ToString()}: converted {result.Converted} cash offers.");
         if (settings.WriteReport)

@@ -285,11 +285,13 @@ Check("optional stack-sized boxes preserve defaults and price whole payloads", A
 Check("box templates precede the actual SPT profile integrity cutoff", AmmoBoxChecks.PreloadIntegrity);
 Check("box conversion preserves original barters, exclusions and infeasible offers", AmmoBoxChecks.PreservedOffers);
 Check("box quotas remain rounds and installed purchase hooks bind", AmmoBoxChecks.QuotasAndLocales);
+Check("native box persistence accepts remaining round quota", NativeBoxQuotaChecks.Run);
 Check("ammo batches preserve templates, native integrity, defaults and seeded restocks", AmmoBatchChecks.Conversion);
 Check("ammo batch payment validation and flea quantities preserve round accounting", AmmoBatchChecks.PaymentAndFlea);
 Check("client batch display is scoped and all server hooks bind", AmmoBatchChecks.ClientDisplay);
 Check("native batch delivery, payment, quotas, response and failed purchases", NativeBatchChecks.Run);
 Check("OpenBarters batch approvals are scoped, expiring and single use", OpenBartersBatchChecks.Run);
+Check("ItemInfo descriptions stay bounded without altering short text or rich-text rows", ItemInfoChecks.Descriptions);
 Check("SPT assortment and restock hooks bind to the installed core", () =>
 {
     var harmony = new Harmony("com.forcedroidbrain.barterizer.core-tests");
@@ -305,6 +307,9 @@ Check("SPT assortment and restock hooks bind to the installed core", () =>
 });
 if (sptRoot is not null)
 {
+    string itemInfoDll = Path.Combine(sptRoot, "SPT_Runtime/user/mods/ODT-ItemInfo-4.0/ODT-ItemInfo-4.0.dll");
+    if (File.Exists(itemInfoDll)) Check("actual ItemInfo DLL reproduces the box crash and binds scoped price guards", () => ItemInfoChecks.ActualApi(itemInfoDll));
+    else Console.WriteLine("SKIP: optional ItemInfo DLL is not installed.");
     Check("real SPT 4.1.6 vanilla database audit", () => AuditDatabase(sptRoot));
     Check("real SPT database audit with 25 percent variety", () => AuditDatabase(sptRoot, 25));
     Check("real loose-ammo offers gain wider seeded variety", () => AuditLooseAmmoVariety(sptRoot));

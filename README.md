@@ -4,7 +4,7 @@
 
 A mod for **SPT 4.1.6** that turns cash offers into ordinary item barters, with a client companion for optional ammunition batches. Designed to complement [OpenBarters](https://github.com/forcedroidbrain/OpenBarters/tree/feature/partial-barter-price-multiplier) and [HardcoreRules](https://github.com/dwesterwick/SPTHardcoreRules).
 
-Version **0.2.0**, updated November 22, 2026. This replaces the original November 21 release with expanded variety, optional ammunition batches, a client companion and OpenBarters compatibility fixes. The client now uses the shared GUID `com.forcedroidbrain.barterizer` and name `forcedroidbrain-Barterizer` required for a combined Forge mod. Automated checks cover compiled plugin metadata, native SPT purchases, client patch bindings and the installed HardcoreRules 3.1.0/OpenBarters 1.1.0 APIs. Before this metadata correction, both plugins loaded in a live SPT 4.1.6 session and a 300-round Prapor OpenBarters purchase confirmed payment, delivered rounds, remaining quota and the corrected UI layout. Gameplay code is unchanged; the final metadata rebuild has not been loaded in the game. Other traders and flea purchases have not all been checked in gameplay.
+Version **0.2.1** fixes compatibility with ODT's Item Info, repeat purchases of generated ammunition boxes, and batch trades that combine regular barter items with OpenBarters substitutes.
 
 ## Behavior
 
@@ -25,7 +25,7 @@ The barter target is the original per-round cash price multiplied by the actual 
 
 Server stock and saved purchase history remain in rounds. Existing purchases and native edition bonuses are counted before dividing into full batches; neither limits nor counters are reset. Stock/quota leftovers smaller than one batch are unavailable until the next reset. Missing client support, invalid quantities, insufficient quota/stock and incorrect whole-batch payments are rejected. NPC/player flea offers outside converted trader offers are unaffected.
 
-OpenBarters substitutions are supported through the companion: it uses the installed OpenBarters basket valuation and settings, including its partial-substitution policy when available. A validated basket is bound to that purchase before the server translates batches into rounds. Native exact-recipe purchases keep their existing validation. OpenBarters itself and its configuration are not replaced. Both the installed 1.1.0 `GetRequiredValue`/`GetBasketValue` API and the newer `GetBarterValue().CanTrade` API are supported.
+The companion uses OpenBarters' valuation and settings. With OpenBarters 1.2.0, it includes both the items in regular barter slots and the substitutes in the payment it sends for approval. It also supports builds with the `GetBarterValue().CanTrade` API. The companion sends batch data and barter payment requests only to the configured SPT server. Approval requests contain the trader and offer IDs, batch quantity, and the IDs and quantities of the items used for payment.
 
 The trader's batch information occupies its own row in the scrolling buy-panel layout. Native deal-button and equivalent-price labels remain under the game's/OpenBarters' control. Flea rows retain the batch-size suffix.
 
@@ -61,6 +61,12 @@ The server does not apply OpenBarters' substitute surcharge. With our OpenBarter
 
 Stock OpenBarters can also recognize generated recipes as ordinary barters, but it does not have the partial-substitution pricing added in our branch. OpenBarters itself is optional: the generated recipes can be paid normally.
 
+## ItemInfo compatibility
+
+ODT's Item Info is optional. When it is installed, Barterizer handles ammunition without handbook prices when ItemInfo inspects generated boxes. This also applies to legacy box definitions retained in batch mode. No prices or handbook records are added.
+
+For ingredients used in generated barters, ItemInfo's barter-resource list shows up to 40 complete entries, within a 6000-character budget, followed by the number omitted. This keeps heavily used ingredients such as AA batteries from receiving oversized inspection descriptions. Trader offers, payment amounts, limits and seeded recipes are unchanged. Short lists are kept as they were. The compatibility hooks require no new settings and are checked against ItemInfo 3.0.0 for SPT 4.1.6.
+
 ## HardcoreRules integration
 
 HardcoreRules is optional and is detected at runtime without a build dependency.
@@ -84,7 +90,7 @@ The client companion is required for optional batch sales and passive when they 
 
 When upgrading, back up your existing mod folder and keep your current `config.json` instead of replacing it with the ZIP's defaults. The new `recipeValueTolerancePercent` setting defaults to `0` when omitted. Add it with a value such as `25` to enable variety, then restart the server.
 
-VirusTotal file reports for the final metadata rebuild: [server DLL](https://www.virustotal.com/gui/file/dd42ab59266ef52c15c7cf132994d2293e7f9196d75735fcf6e39f72cf48b41c/detection), [client DLL](https://www.virustotal.com/gui/file/0779e2548d3dd520143d45216d7f463f56a7a0800750fde1e44ce52ac01c32d9/detection). Earlier 0.2.0 reports cover different binaries. Use the attached `SHA256SUMS-0.2.0.txt` to identify the exact replacement files.
+The release's SHA-256 list identifies both DLLs and the install archive.
 
 To uninstall, unpack any legacy generated boxes first, close the game/server, and remove the server folder and companion DLL. Ordinary loose rounds and saved purchase counters remain valid.
 
@@ -124,7 +130,7 @@ Requires PowerShell 7, .NET 10 SDK and a local SPT 4.1.6 installation. No NuGet 
 pwsh -File tools/Build.ps1 -SptRoot 'D:\SPT4'
 ```
 
-This builds both DLLs, runs the server/native transaction checks and client binding checks, and packages `dist/SPT-Barterizer-0.2.0.zip`. The package version is read from the project file. It **does not deploy** to the game. The optional `-SkipTests` switch only builds and packages.
+This builds both DLLs, runs the server and client checks, and creates `dist/SPT-Barterizer-0.2.1.zip`. The archive version comes from the server project file. The optional `-SkipTests` switch builds the archive without running the checks.
 
 The tests exercise actual SPT models and serializers. `--spt-root` checks the real vanilla database and, when present, the installed HardcoreRules DLL. They run entirely in the test process: they do not launch the server or alter profiles, installed mods or database files. Test failures are caught and reported to the console with a nonzero exit status.
 
@@ -142,6 +148,7 @@ OpenAI Codex was used to help develop and revise the C# code, automated tests an
 
 ## Changelog
 
+- **0.2.1:** Fixed Item Info compatibility for generated ammunition boxes and shortened long barter ingredient descriptions. Fixed repeat box purchases and mixed OpenBarters payments for ammunition batches.
 - **0.2.0 (November 22 replacement):** Expanded `recipeValueTolerancePercent` to 0–300 for cheap offers; added optional `sellAmmoInBatches`, the client companion, preserved linked search and round-based purchase accounting. Fixed OpenBarters substitute payments and overlapping UI text. Includes optional legacy `sellAmmoInStackBoxes` and early template registration compatible with database integrity checks. Both ammo modes default to `false`; seeded recipes and existing barters retain their default behavior. Final rebuild aligns client/server/Forge GUIDs and uses the client name `forcedroidbrain-Barterizer`.
 - **0.2.0 (November 21 original):** Added optional `recipeValueTolerancePercent` (0–100) for seeded variety among similarly priced recipe completions. The default `0`, including older configs without the setting, preserves previous recipes. Existing barters and offer restrictions remain unchanged.
 - **0.1.3:** Aligned the server metadata name with Forge naming rules and expanded documentation, attribution, support and AI disclosure. Barter-generation behavior is unchanged.

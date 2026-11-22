@@ -16,7 +16,7 @@ using UnityEngine;
 
 namespace SptBarterizer.Client;
 
-[BepInPlugin("com.forcedroidbrain.barterizer", "forcedroidbrain-Barterizer", "0.2.0")]
+[BepInPlugin("com.forcedroidbrain.barterizer", "forcedroidbrain-Barterizer", "0.2.1")]
 [BepInDependency("com.SPT.core", "4.1.0")]
 [BepInDependency("com.egbog.openbarters", BepInDependency.DependencyFlags.SoftDependency)]
 public sealed class BatchPlugin : BaseUnityPlugin
