@@ -17,6 +17,13 @@ AssemblyLoadContext.Default.Resolving += (_, name) =>
     return null;
 };
 var client = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(clientFile));
+var pluginMetadata = client.GetType("SptBarterizer.Client.BatchPlugin", true)!.CustomAttributes
+    .Single(attribute => attribute.AttributeType.FullName == "BepInEx.BepInPlugin").ConstructorArguments;
+if ((string?)pluginMetadata[0].Value != "com.forcedroidbrain.barterizer"
+    || !System.Text.RegularExpressions.Regex.IsMatch((string?)pluginMetadata[1].Value ?? "", "^forcedroidbrain-[A-Za-z0-9]+$")
+    || (string?)pluginMetadata[2].Value != client.GetName().Version!.ToString(3))
+    throw new Exception("Compiled client plugin identity/version does not meet the combined Forge mod metadata contract");
+Console.WriteLine("PASS: compiled client GUID, author-prefixed name and assembly/plugin version match Forge metadata requirements.");
 var eft = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(Path.Combine(root, "EscapeFromTarkov_Data/Managed/Assembly-CSharp.dll")));
 string optionalOpenBarters = Path.Combine(root, "BepInEx/plugins/OpenBarters/OpenBarters.dll");
 if (File.Exists(optionalOpenBarters)) AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(optionalOpenBarters));

@@ -4,7 +4,7 @@
 
 A mod for **SPT 4.1.6** that turns cash offers into ordinary item barters, with a client companion for optional ammunition batches. Designed to complement [OpenBarters](https://github.com/forcedroidbrain/OpenBarters/tree/feature/partial-barter-price-multiplier) and [HardcoreRules](https://github.com/dwesterwick/SPTHardcoreRules).
 
-Version **0.2.0**, updated November 22, 2026. This replaces the original November 21 release with expanded variety, optional ammunition batches, a client companion and OpenBarters compatibility fixes. Automated checks cover native SPT purchases, client patch bindings and the installed HardcoreRules 3.1.0/OpenBarters 1.1.0 APIs. Both plugins loaded in a live SPT 4.1.6 session; a 300-round Prapor batch purchase through OpenBarters confirmed payment, delivered rounds, remaining quota and the corrected UI layout. Other traders and flea purchases have not all been checked in gameplay.
+Version **0.2.0**, updated November 22, 2026. This replaces the original November 21 release with expanded variety, optional ammunition batches, a client companion and OpenBarters compatibility fixes. The client now uses the shared GUID `com.forcedroidbrain.barterizer` and name `forcedroidbrain-Barterizer` required for a combined Forge mod. Automated checks cover compiled plugin metadata, native SPT purchases, client patch bindings and the installed HardcoreRules 3.1.0/OpenBarters 1.1.0 APIs. Before this metadata correction, both plugins loaded in a live SPT 4.1.6 session and a 300-round Prapor OpenBarters purchase confirmed payment, delivered rounds, remaining quota and the corrected UI layout. Gameplay code is unchanged; the final metadata rebuild has not been loaded in the game. Other traders and flea purchases have not all been checked in gameplay.
 
 ## Behavior
 
@@ -84,7 +84,7 @@ The client companion is required for optional batch sales and passive when they 
 
 When upgrading, back up your existing mod folder and keep your current `config.json` instead of replacing it with the ZIP's defaults. The new `recipeValueTolerancePercent` setting defaults to `0` when omitted. Add it with a value such as `25` to enable variety, then restart the server.
 
-VirusTotal reports for these replacement server/client DLLs are pending. The original 0.2.0 server DLL report does not cover these binaries. Use the attached `SHA256SUMS-0.2.0.txt` to identify the exact replacement files.
+VirusTotal file reports for the final metadata rebuild: [server DLL](https://www.virustotal.com/gui/file/dd42ab59266ef52c15c7cf132994d2293e7f9196d75735fcf6e39f72cf48b41c/detection), [client DLL](https://www.virustotal.com/gui/file/0779e2548d3dd520143d45216d7f463f56a7a0800750fde1e44ce52ac01c32d9/detection). Earlier 0.2.0 reports cover different binaries. Use the attached `SHA256SUMS-0.2.0.txt` to identify the exact replacement files.
 
 To uninstall, unpack any legacy generated boxes first, close the game/server, and remove the server folder and companion DLL. Ordinary loose rounds and saved purchase counters remain valid.
 
@@ -142,7 +142,7 @@ OpenAI Codex was used to help develop and revise the C# code, automated tests an
 
 ## Changelog
 
-- **0.2.0 (November 22 replacement):** Expanded `recipeValueTolerancePercent` to 0–300 for cheap offers; added optional `sellAmmoInBatches`, the client companion, preserved linked search and round-based purchase accounting. Fixed OpenBarters substitute payments and overlapping UI text. Includes optional legacy `sellAmmoInStackBoxes` and early template registration compatible with database integrity checks. Both ammo modes default to `false`; seeded recipes and existing barters retain their default behavior.
+- **0.2.0 (November 22 replacement):** Expanded `recipeValueTolerancePercent` to 0–300 for cheap offers; added optional `sellAmmoInBatches`, the client companion, preserved linked search and round-based purchase accounting. Fixed OpenBarters substitute payments and overlapping UI text. Includes optional legacy `sellAmmoInStackBoxes` and early template registration compatible with database integrity checks. Both ammo modes default to `false`; seeded recipes and existing barters retain their default behavior. Final rebuild aligns client/server/Forge GUIDs and uses the client name `forcedroidbrain-Barterizer`.
 - **0.2.0 (November 21 original):** Added optional `recipeValueTolerancePercent` (0–100) for seeded variety among similarly priced recipe completions. The default `0`, including older configs without the setting, preserves previous recipes. Existing barters and offer restrictions remain unchanged.
 - **0.1.3:** Aligned the server metadata name with Forge naming rules and expanded documentation, attribution, support and AI disclosure. Barter-generation behavior is unchanged.
 - **0.1.2:** Prefer at most five of each ingredient by selecting more valuable items. Expensive offers that cannot meet this preference may use more, up to the existing hard limit.
